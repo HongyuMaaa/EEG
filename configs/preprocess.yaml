@@ -1,0 +1,43 @@
+# Preprocessing configuration. Every key is documented in docs/preprocessing.md.
+# The values used for a run are also saved next to its outputs (params.json).
+
+data_dir: Data
+output_dir: derivatives/preprocessed
+montage_file: Data/64-channels.loc
+
+# --- Recording facts (checked at load time, never changed) ---
+native_sfreq: 200.0          # Hz; the EDF files are 200 Hz (description.docx says 250 Hz, which is wrong)
+n_channels: 21
+
+# --- Band-pass filter (zero-phase FIR, applied to the continuous recording) ---
+filter:
+  l_freq: 1.0                # Hz, high-pass edge
+  h_freq: 30.0               # Hz, low-pass edge
+  l_trans_bandwidth: 1.0     # Hz -> stop band below 0 Hz (DC)
+  h_trans_bandwidth: 7.5     # Hz -> stop band from 37.5 Hz (below the 50 Hz Nyquist of 100 Hz)
+  filter_length: auto        # MNE rule: 3.3 / min(transition bandwidth) s = 3.3 s = 661 taps at 200 Hz
+  fir_window: hamming
+  fir_design: firwin
+  phase: zero
+
+# --- Bad-channel handling (per session) ---
+bad_channels:
+  std_ratio_threshold: 3.0   # bad if the channel's std (after CAR) > 3 x median channel std
+  max_iterations: 3          # remove the worst channel per iteration, then re-reference
+  interpolation: spherical_spline
+
+# --- Re-referencing ---
+reference: average           # common average reference (CAR), applied after interpolation
+
+# --- Epoching ---
+epoch:
+  tmin: 0.14                 # s after pair onset (start included)
+  tmax: 0.34                 # s after pair onset (end excluded) -> 200 ms window = one pair period (see docs)
+  baseline: null             # no baseline correction (the pre-stimulus interval holds the previous trial)
+
+# --- Resampling ---
+target_sfreq: 200.0          # Hz; native rate kept (decimation factor 1) -> 40 samples per trial
+
+# --- Trial-level artifact flag (trials are kept and flagged, not deleted) ---
+artifact:
+  ptp_threshold_uv: 100.0    # flag a trial if any channel's peak-to-peak amplitude in the window exceeds 100 uV
