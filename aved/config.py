@@ -31,7 +31,7 @@ class BadChannelConfig:
 
 @dataclass(frozen=True)
 class EpochConfig:
-    tmin: float = 0.14
+    tmin: float = 0.05
     tmax: float = 0.34
     baseline: None = None
 

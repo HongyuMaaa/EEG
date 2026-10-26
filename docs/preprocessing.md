@@ -99,40 +99,57 @@ average reference → epoching → resampling → artifact flag.
 
 | Parameter | Value |
 |---|---|
-| Window | **[0.14, 0.34) s** after pair onset (start included, end excluded) = 200 ms |
-| Samples | 40 per channel at 200 Hz (native samples +28 … +67) |
+| Window | **[0.05, 0.34) s** after pair onset (start included, end excluded) = 290 ms |
+| Samples | 58 per channel at 200 Hz (native samples +10 … +67) |
 | Baseline correction | None: the pre-onset interval contains the previous trial's response, and the 1 Hz high-pass already removes offsets |
 
-**Why it starts at 0.14 s:** visual-evoked-response latency. The grand-average
-lateralization effect is absent at 140–160 ms, peaks at ≈200 ms (+0.95 µV,
-first stimulus; t = 6.0 over 28 subjects) and reverses at ≈280 ms
-(−0.43 µV, second stimulus; t = −4.0).
+**Stimulus timing within a trial** (Xu et al. 2018, Fig. 3C): the first
+lateral stimulus is shown at 0 ms and the second at 100 ms, each for 25 ms.
+The paper places the aVEP P1–N1 at 81–130 ms after a stimulus and uses
+0.05–0.45 s after code onset for classification.
 
-**Why it ends at 0.34 s (one pair period):**
-- Trials are spaced 200 ms apart, so trial *t+1*'s own [0.14, 0.34) window
-  begins exactly where trial *t*'s ends. Consecutive epochs share no samples
-  (apart from timing jitter).
-- A longer window mainly adds the *next* trial's response. With [0.14, 0.64)
-  s, the label of trial *t+1* was decodable from epoch *t* almost as well as
-  trial *t*'s own label (mean LDA accuracy 0.712 vs 0.732; 4 subjects even
-  peaked at *t+1*).
-- With [0.14, 0.34) s, lag-0 accuracy stays the same or improves, while
-  lag-+1 accuracy drops sharply: the mean over 28 subjects is 0.739 at lag 0
-  vs 0.594 at lag +1, and all 28 subjects peak at lag 0. Examples (lag 0 /
-  lag +1):
+**Why it starts at 0.05 s:** to include the response to the *first* stimulus.
+The grand-average lateralization class difference, over 28 subjects, has
+three phases inside the window:
 
-  | Subject | [0.14, 0.34) s | [0.14, 0.64) s |
-  |---|---|---|
-  | Sub11 | 0.794 / 0.603 | 0.767 / 0.786 |
-  | Sub21 | 0.739 / 0.566 | 0.731 / 0.696 |
+| Phase | Time | Class difference | Cause |
+|---|---|---|---|
+| 1 | ≈90–130 ms | −0.76 µV at 110 ms (t = −6.6 at 90 ms) | First stimulus, P1–N1 |
+| 2 | ≈190–210 ms | +1.01 µV at 210 ms (t = 7.3 at 190 ms) | Second stimulus, P1–N1 |
+| 3 | ≈250–310 ms | −0.42 µV (t = −4.3 at 290 ms) | Later reversal |
 
-- The longer window remains available by setting `epoch.tmax` (e.g. 0.64,
-  with `target_sfreq: 100`) as an ablation.
+Nothing is visible before 70 ms. An earlier version of the pipeline started
+at 0.14 s and missed phase 1.
+
+**Why it ends at 0.34 s:**
+- This captures phase 3 while limiting the *next* trial's response, which
+  starts 200 ms later and whose own P1–N1 begins at ≈0.28 s.
+- A long window mainly adds the next trial. With [0.14, 0.64) s, the label of
+  trial *t+1* was decodable from epoch *t* almost as well as trial *t*'s own
+  label (mean LDA accuracy 0.712 vs 0.732; 4 subjects peaked at *t+1*).
+
+**Comparison of windows** (leave-one-session-out shrinkage LDA, mean over 28
+subjects; decoding the label of trial *t + lag* from epoch *t*):
+
+| Window | lag −1 | lag 0 | lag +1 | Subjects peaking at lag 0 |
+|---|---|---|---|---|
+| **[0.05, 0.34) s (current)** | 0.618 | **0.748** | 0.587 | 28 / 28 |
+| [0.14, 0.34) s | 0.551 | 0.739 | 0.594 | 28 / 28 |
+| [0.14, 0.64) s | 0.545 | 0.732 | 0.712 | 24 / 28 |
+
+**Trade-off:** starting at 0.05 s raises lag-−1 accuracy (0.551 → 0.618)
+because the first 90 ms of the window overlap the end of the previous trial's
+window. Consecutive epochs therefore share 18 samples. This does not leak
+data under the session-wise splits used for evaluation, because neighbouring
+trials always belong to the same session.
+
+Other windows can be set via `epoch.tmin` and `epoch.tmax` for ablation; for
+example the paper's [0.05, 0.45), or [0.05, 0.64) with `target_sfreq: 100`.
 
 ### 3.5 Resampling
 
 - **Target rate: 200 Hz**, i.e. the native rate is kept (decimation factor 1).
-- With a 200 ms window, 100 Hz would leave only 20 samples, too few for
+- With a 290 ms window, 100 Hz would leave only 29 samples, too few for
   EEGNet's two pooling stages (×4, ×8).
 - The 30 Hz low-pass (stop band from 37.5 Hz) already band-limits the signal,
   so `target_sfreq: 100` (exact 2× decimation of the filtered continuous
@@ -156,7 +173,7 @@ script):
 
 | Key | Shape | Content |
 |---|---|---|
-| `X` | (2880, 21, 40) float32 | Trials, µV |
+| `X` | (2880, 21, 58) float32 | Trials, µV |
 | `y` | (2880,) | 0 = left→right, 1 = right→left |
 | `trigger` | (2880,) | Raw trigger (1/2) |
 | `session`, `block` | (2880,) | 1–6, 1–3 |

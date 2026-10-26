@@ -31,12 +31,12 @@ reference: average           # common average reference (CAR), applied after int
 
 # --- Epoching ---
 epoch:
-  tmin: 0.14                 # s after pair onset (start included)
-  tmax: 0.34                 # s after pair onset (end excluded) -> 200 ms window = one pair period (see docs)
+  tmin: 0.05                 # s after pair onset (start included); first stimulus P1-N1 at ~80-130 ms
+  tmax: 0.34                 # s after pair onset (end excluded) -> 290 ms window (see docs)
   baseline: null             # no baseline correction (the pre-stimulus interval holds the previous trial)
 
 # --- Resampling ---
-target_sfreq: 200.0          # Hz; native rate kept (decimation factor 1) -> 40 samples per trial
+target_sfreq: 200.0          # Hz; native rate kept (decimation factor 1) -> 58 samples per trial
 
 # --- Trial-level artifact flag (trials are kept and flagged, not deleted) ---
 artifact:
