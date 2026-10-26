@@ -104,8 +104,9 @@ average reference → epoching → resampling → artifact flag.
 | Baseline correction | None: the pre-onset interval contains the previous trial's response, and the 1 Hz high-pass already removes offsets |
 
 **Why it starts at 0.14 s:** visual-evoked-response latency. The grand-average
-lateralization effect starts after ~150 ms and peaks at ≈190 ms (first
-stimulus) and ≈290 ms (second stimulus, reversed sign).
+lateralization effect is absent at 140–160 ms, peaks at ≈200 ms (+0.95 µV,
+first stimulus; t = 6.0 over 28 subjects) and reverses at ≈280 ms
+(−0.43 µV, second stimulus; t = −4.0).
 
 **Why it ends at 0.34 s (one pair period):**
 - Trials are spaced 200 ms apart, so trial *t+1*'s own [0.14, 0.34) window
@@ -116,7 +117,8 @@ stimulus) and ≈290 ms (second stimulus, reversed sign).
   trial *t*'s own label (mean LDA accuracy 0.712 vs 0.732; 4 subjects even
   peaked at *t+1*).
 - With [0.14, 0.34) s, lag-0 accuracy stays the same or improves, while
-  lag-+1 accuracy drops sharply. Examples on a subset of subjects (lag 0 /
+  lag-+1 accuracy drops sharply: the mean over 28 subjects is 0.739 at lag 0
+  vs 0.594 at lag +1, and all 28 subjects peak at lag 0. Examples (lag 0 /
   lag +1):
 
   | Subject | [0.14, 0.34) s | [0.14, 0.64) s |
