@@ -1,0 +1,32 @@
+# EEGNet-8,2 baseline (Lawhern et al. 2018). Documented in docs/baselines.md.
+model:
+  F1: 8                # temporal filters
+  D: 2                 # spatial filters per temporal filter
+  F2: 16               # pointwise filters
+  kern_length: 32      # temporal kernel, samples (160 ms at 200 Hz; the original fs/2 = 100 exceeds our 58-sample trials)
+  sep_length: 16       # separable temporal kernel, samples
+  pool1: 4
+  pool2: 8
+  spatial_max_norm: 1.0
+  dense_max_norm: 0.25
+
+# Per-protocol training settings. Dropout follows the EEGNet paper (0.5 within-subject, 0.25 cross-subject).
+training:
+  within:
+    dropout: 0.5
+    batch_size: 64
+    lr: 0.001
+    max_epochs: 300
+    patience: 50       # early stopping on validation loss; best epoch is restored
+  pooled:
+    dropout: 0.25
+    batch_size: 256
+    lr: 0.001
+    max_epochs: 150
+    patience: 20
+  loso:
+    dropout: 0.25
+    batch_size: 256
+    lr: 0.001
+    max_epochs: 150
+    patience: 20

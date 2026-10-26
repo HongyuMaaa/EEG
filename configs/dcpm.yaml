@@ -1,0 +1,3 @@
+# DCPM baseline (Xu et al. 2018). Documented in docs/baselines.md.
+n_components_grid: [1, 2, 4, 8]   # DSP components; chosen per fold on the validation data
+reg: 1.0e-6                       # ridge on S_w, relative to its mean eigenvalue
