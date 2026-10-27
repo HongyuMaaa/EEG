@@ -292,45 +292,47 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
       "signal, shown next.");
   }
 
-  // ===== 4. Background: observations =====
+  // ===== 4. Background: two challenges, measured data =====
   {
     const s = pres.addSlide({ masterName: "CONTENT", sectionTitle: SECTIONS[0] });
     s.addText(sectionTitle(0), { placeholder: "title" });
 
-    const t = [50, 70, 90, 110, 130, 150, 170, 190, 210, 230, 250, 270, 290, 310, 330];
-    const v = [-0.01, -0.03, -0.44, -0.76, -0.38, 0.04, 0.12, 0.65, 1.01, 0.32, -0.30, -0.42, -0.39, -0.18, 0.02];
-    s.addChart(pres.charts.LINE, [{ name: "Lateralization", labels: t.map(String), values: v }], {
-      objectName: "Lateralization chart", x: 0.45, y: 1.45, w: 7.6, h: 4.6,
-      chartColors: [HEX.red], lineSize: 2.5, lineDataSymbol: "circle", lineDataSymbolSize: 6,
-      showLegend: false, showTitle: true, title: "Grand-average lateralization (n = 28)",
-      titleFontSize: 16, titleColor: HEX.black, titleFontFace: "+mn-lt",
-      showCatAxisTitle: true, catAxisTitle: "Time after pair onset (ms)",
-      showValAxisTitle: true, valAxisTitle: "Amplitude (µV)",
-      catAxisTitleFontSize: 14, valAxisTitleFontSize: 14, catAxisTitleColor: HEX.black, valAxisTitleColor: HEX.black,
-      catAxisLabelColor: HEX.black, valAxisLabelColor: HEX.black, catAxisLabelFontSize: 12, valAxisLabelFontSize: 12,
-      catAxisLabelFontFace: "+mn-lt", valAxisLabelFontFace: "+mn-lt",
-      catAxisTitleFontFace: "+mn-lt", valAxisTitleFontFace: "+mn-lt",
-      valAxisMinVal: -1, valAxisMaxVal: 1.2, valAxisMajorUnit: 0.5, valAxisLabelFormatCode: "0.0",
-      valGridLine: { color: "D9D9D9", size: 0.5 }, catGridLine: { style: "none" }, catAxisLabelPos: "low",
-    });
-    text(s, "Chart note", "Class difference (left→right − right→left) of the hemispheric difference, " +
-      "averaged over 9 mirror channel pairs", { x: 0.6, y: 6.1, w: 7.4, h: 0.6, fontSize: 12, color: C.accent3 });
+    const fw = 6.1, fh = 3.75, fy = 1.75, xs = [0.45, 6.8];
+    const fig = (f) => path.join(__dirname, "figures", f);
+    [["Challenge 1: Low single-trial SNR", "slide4_snr.png",
+      "Measured single trials (grey) vs. class averages, all 28 subjects"],
+     ["Challenge 2: High inter-subject variability", "slide4_variability.png",
+      "Measured class averages of four example subjects and per-subject statistics"]]
+      .forEach(([head, file, alt], i) => {
+        text(s, `Challenge ${i + 1} head`, head, { x: xs[i], y: 1.27, w: fw, h: 0.42, fontSize: 18, bold: true,
+          color: C.accent1, align: "center", valign: "middle" });
+        s.addImage({ objectName: `Challenge ${i + 1} figure`, path: fig(file), x: xs[i], y: fy, w: fw, h: fh,
+          altText: alt });
+      });
 
-    const obs = [
-      ["1. Very weak effect", "Class difference ≈ 1 µV"],
-      ["2. Time-varying lateralization", "Sign reverses: −0.76 µV at 110 ms, +1.01 µV at 210 ms"],
-      ["3. Overlapping responses", "Pairs every 200 ms, so each epoch also contains the next trials"],
-      ["4. Inter-subject heterogeneity", "Mirror-symmetry correlation −0.64 to 0.75; peak latency 105–245 ms"],
-    ];
-    text(s, "Observations", obs.flatMap(([h, d], i) => [
-      { text: h, options: { bold: true, breakLine: true } },
-      { text: d, options: { breakLine: i < obs.length - 1 } },
-      ...(i < obs.length - 1 ? [{ text: " ", options: { fontSize: 8, breakLine: true } }] : []),
-    ]), { x: 8.45, y: 1.65, w: 4.5, h: 4.6, fontSize: 18 });
+    text(s, "Challenge 1 text", [
+      { text: "Single trials fluctuate by about ±10 µV (SD 3.3 µV), while the class difference peaks at only ≈ 1 µV",
+        options: { breakLine: true } },
+      { text: "→ The task-related ERP is buried in background EEG", options: { bold: true } },
+    ], { x: xs[0] + 0.15, y: fy + fh + 0.1, w: fw - 0.3, h: 0.85, fontSize: 15 });
+    text(s, "Challenge 2 text", [
+      { text: "Mirror-symmetry r: −0.65 to 0.86;  peak latency: 150–300 ms;  peak amplitude: 0.3–3.9 µV",
+        options: { breakLine: true } },
+      { text: "→ Waveform, timing and lateralization differ across subjects", options: { bold: true } },
+    ], { x: xs[1] + 0.15, y: fy + fh + 0.1, w: fw - 0.3, h: 0.85, fontSize: 15 });
 
-    s.addNotes("~40 s. Exploratory analysis of the class-averaged ERPs: the effect is about 1 µV and changes sign " +
-      "between ~110 and ~210 ms, matching the stimulus order. Responses to neighbouring trials overlap, and " +
-      "subjects differ strongly in symmetry and latency.");
+    s.addText("All waveforms are measured data (28 subjects; 1–30 Hz, common average reference). Signal: left − right " +
+      "hemisphere, mean of 9 mirror channel pairs. r: correlation of the class-0 pattern with the sign-flipped class-1 " +
+      "pattern (9 pairs × time; mirror rule gives r = 1). Peak latency: largest class difference within 80–300 ms.", {
+      objectName: "Reference", x: 0.35, y: 6.5, w: 11.9, h: 0.85, fontSize: 11, color: C.accent3,
+      valign: "bottom", margin: 0, isTextBox: true });
+
+    s.addNotes("~45 s. Left: grey lines are real single trials; red and blue are the class averages, black dashed " +
+      "their difference. Single trials swing by about ten microvolts, the class difference is about one, so a " +
+      "single trial carries very little of the signal. Responses to neighbouring pairs also overlap, since pairs " +
+      "come every 200 ms. Right: four real subjects. Sub18 follows the mirror rule, Sub22 peaks early, Sub17 is " +
+      "inverted, Sub05 barely responds. Across 28 subjects r ranges from −0.65 to 0.86 and the peak from 150 to " +
+      "300 ms, so a model trained on some subjects transfers poorly to others.");
   }
 
   // ===== 5. Objectives =====
