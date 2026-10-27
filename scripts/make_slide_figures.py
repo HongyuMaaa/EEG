@@ -61,25 +61,61 @@ def subject_stats(hd, y, t):
 
 
 def fig_snr(subjects, t, out: Path, rng):
+    """Main panel: single trials and class averages on one linear scale. Zoom panel: the averages magnified
+    10x (also linear), linked to a box on the main panel."""
+    from matplotlib.patches import ConnectionPatch, Rectangle
+
     lat0 = np.mean([s["lat0"] for s in subjects.values()], 0)
     lat1 = np.mean([s["lat1"] for s in subjects.values()], 0)
-    fig, ax = plt.subplots(figsize=(6.1, 3.75))
-    # 40 random single trials (20 per class) drawn across all subjects
+    diff = lat0 - lat1
+    big, small = 15.0, 1.5
+
+    fig = plt.figure(figsize=(6.1, 3.75))
+    ax = fig.add_axes([0.10, 0.31, 0.40, 0.60])
+    az = fig.add_axes([0.575, 0.31, 0.35, 0.60])
+
+    # 40 random single trials drawn across all subjects
     for _ in range(40):
-        hd, y, _ = subjects[rng.integers(1, 29)]["raw"]
+        hd, _, _ = subjects[rng.integers(1, 29)]["raw"]
         ax.plot(t, hd[rng.integers(len(hd))].mean(0), color=GRAY, lw=0.6, alpha=0.3, zorder=1)
-    ax.plot([], [], color=GRAY, lw=0.8, alpha=0.6, label="Single trials (n = 40, random)")
-    ax.plot(t, lat0, color=C0, lw=2.0, label="Class 0 average (left → right)", zorder=3)
-    ax.plot(t, lat1, color=C1, lw=2.0, label="Class 1 average (right → left)", zorder=3)
-    ax.plot(t, lat0 - lat1, color="black", lw=2.0, ls="--", label="Difference (0 − 1)", zorder=4)
-    ax.axhline(0, color="black", lw=0.5, zorder=2)
-    ax.set_xlim(t[0], t[-1])
-    ax.set_ylim(-15, 15)
-    ax.set_xlabel("Time after pair onset (ms)")
+    for a, lw in ((ax, 1.3), (az, 2.0)):
+        a.plot(t, lat0, color=C0, lw=lw, zorder=3)
+        a.plot(t, lat1, color=C1, lw=lw, zorder=3)
+        a.plot(t, diff, color="black", lw=lw, ls="--", zorder=4)
+        a.axhline(0, color="black", lw=0.5, zorder=2)
+        a.set_xlim(t[0], t[-1])
+        a.set_xticks([100, 200, 300])
+        a.set_xlabel("Time after pair onset (ms)")
+    ax.set_ylim(-big, big)
+    az.set_ylim(-small, small)
+    az.yaxis.tick_right()                 # keeps the left edge free for the zoom connectors
     ax.set_ylabel("Hemispheric difference (µV)")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, frameon=False,
-              handlelength=1.8, columnspacing=1.2)
-    fig.tight_layout(pad=0.3)
+    ax.set_title("All signals (±15 µV)", pad=4)
+    az.set_title("Zoom ×10: averages (±1.5 µV)", pad=4)
+
+    # Zoom box on the main panel, connected to the zoom panel
+    ax.add_patch(Rectangle((t[0], -small), t[-1] - t[0], 2 * small, fill=False, ec="black", lw=0.9, zorder=5))
+    for yv in (small, -small):
+        fig.add_artist(ConnectionPatch(xyA=(t[-1], yv), coordsA=ax.transData, xyB=(t[0], yv), coordsB=az.transData,
+                                       color="black", lw=0.7, ls=(0, (3, 2))))
+    for sp in az.spines.values():
+        sp.set_visible(True)
+        sp.set_linewidth(0.9)
+
+    # Peaks of the class difference
+    for lo, hi in ((80, 150), (180, 240)):
+        w = (t >= lo) & (t <= hi)
+        k = np.argmax(np.abs(diff[w]))
+        tp, vp = t[w][k], diff[w][k]
+        az.annotate(f"{vp:+.2f} µV\n{tp:.0f} ms".replace("-", "−"), xy=(tp, vp), xytext=(tp + 28, vp * 1.12),
+                    fontsize=9, ha="left", va="center", arrowprops=dict(arrowstyle="-", lw=0.6, color="black"))
+
+    handles = [plt.Line2D([], [], color=GRAY, lw=0.9, alpha=0.7), plt.Line2D([], [], color=C0, lw=2),
+               plt.Line2D([], [], color=C1, lw=2), plt.Line2D([], [], color="black", lw=2, ls="--")]
+    fig.legend(handles, ["Single trials (n = 40, random)", "Class 0 average (left → right)",
+                         "Class 1 average (right → left)", "Difference (0 − 1)"],
+               loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=2, frameon=False,
+               handlelength=1.8, columnspacing=1.2)
     fig.savefig(out)
     plt.close(fig)
 
