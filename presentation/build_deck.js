@@ -737,6 +737,126 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
     "mirror correlation: strong lateralizers should use the mirror-equivariant experts. (d) Per-subject accuracy; " +
     "points above the diagonal are improvements. All LR-MoE values here are placeholders.");
 
+  // ===== 12. Outline: part 3 =====
+  pres.addSection({ title: SECTIONS[2] });
+  outlineSlide(2, "~3 s.");
+
+  // ===== 13. Next-stage plan: Chapters 1-2 =====
+  {
+    const s = pres.addSlide({ masterName: "CONTENT", sectionTitle: SECTIONS[2] });
+    s.addText(sectionTitle(2), { placeholder: "title" });
+    text(s, "Lead", "Chapters 1–2: from algorithm design to validated, complete methods",
+      { x: 0.6, y: 1.27, w: 12.4, h: 0.4, fontSize: 17, valign: "middle" });
+
+    const H = { bottom: 1, bold: true, fontSize: 15, top: 1.5 };
+    const c = (t, o = {}) => cell(t, { fontSize: 13, ...o });
+    const rows = [
+      ["Comparative experiments",
+        "EEGNet, DCPM + xDAWN-LDA, ShallowConvNet, EEG-Conformer; within-subject and pooled",
+        "EEGNet, DCPM + Euclidean alignment, domain-adversarial training, generic MoE; leave-one-subject-out"],
+      ["Ablation studies",
+        "Each loss term; k ∈ {2, 3, 6}; context-matched vs. class-mean target; naive distillation",
+        "No decomposition; single expert family; no latency variants; learned vs. physiological router"],
+      ["Generalization",
+        "All three protocols; several random seeds; Wilcoxon signed-rank tests with FDR correction",
+        "28 unseen subjects; unlabelled router adaptation; few-shot calibration curves"],
+      ["Robustness",
+        "Fewer training trials (learning curves); channel dropout; session-to-session shift",
+        "Atypical subjects (low mirror r); reduced channel sets; short calibration"],
+      ["Optimization",
+        "Non-linear decoder; teacher ensembles; training cost",
+        "Lightweight experts for real-time use; checking router choices against measured r and latency"],
+    ];
+    const body = rows.map(([a, b, d], i) => {
+      const last = i === rows.length - 1 ? { bottom: 1.5 } : {};
+      return [c(a, { bold: true, ...last }), c(b, last), c(d, last)];
+    });
+    s.addTable([[cell("", H), cell("Chapter 1 · RED (within-subject SNR)", H),
+      cell("Chapter 2 · LR-MoE (cross-subject)", H)], ...body], {
+      objectName: "Plan table", x: 0.6, y: 1.8, w: 12.1, colW: [2.3, 4.9, 4.9],
+      rowH: [0.45, 0.74, 0.74, 0.74, 0.74, 0.74], fontFace: THEME.bodyFontFace, margin: [3, 8, 3, 8] });
+
+    text(s, "Outcome", "Goal: each chapter validated on 28 subjects with statistical tests, ready for one paper per chapter",
+      { x: 0.6, y: 6.05, w: 12.1, h: 0.45, fontSize: 17, bold: true, color: C.accent1, align: "center", valign: "middle" });
+
+    s.addNotes("~35 s. Both methods still need full validation. Comparisons add standard ERP decoders and recent deep " +
+      "models for Chapter 1, and alignment and domain-adaptation methods for Chapter 2. Ablations remove one component " +
+      "at a time. All results are reported over 28 subjects and several seeds with signed-rank tests. Robustness " +
+      "covers less training data, fewer channels and atypical subjects. Optimization prepares the models for real-time use.");
+  }
+
+  // ===== 14. Next-stage plan: online robotic arm =====
+  {
+    const s = pres.addSlide({ masterName: "CONTENT", sectionTitle: SECTIONS[2] });
+    s.addText(sectionTitle(2), { placeholder: "title" });
+    text(s, "Lead", "Chapter 3: online aVEP-based brain-controlled robotic arm with continuous control",
+      { x: 0.6, y: 1.27, w: 12.4, h: 0.4, fontSize: 17, valign: "middle" });
+
+    const ic = {
+      screen: await ICON.avepScreen(), amp: await ICON.amplifier(), net: await ICON.eegnet(),
+      vel: await ICON.velocity(), arm: await ICON.robotArm(),
+    };
+    panel(s, "Loop panel", null, 0.45, 1.75, 8.5, 4.75);
+
+    // Top row: stimulation -> acquisition -> processing -> decoding
+    const yT = 2.0, hT = 0.85, capT = 2.92;
+    const scr = glyph(s, "aVEP screen", ic.screen, 1.4, yT, hT, "aVEP interface showing the workspace with miniature stimuli beside commands");
+    const amp = glyph(s, "Amplifier", ic.amp, 3.55, yT + 0.05, hT - 0.1, "EEG amplifier streaming channels");
+    box(s, "Processing", "Real-time processing", "causal 1–30 Hz filter;\n200 ms epoch per pair", 4.95, yT + 0.05, 1.75, 0.75, { fontSize: 12 });
+    const dec = glyph(s, "Decoder", ic.net, 7.85, yT + 0.08, hT - 0.15, "Proposed decoder network");
+    caption(s, "Screen cap", "aVEP interface", "tiny stimuli beside commands", 1.6, capT, 1.8);
+    caption(s, "Amp cap", "EEG acquisition", "21 channels, streamed", 3.55, capT, 1.7);
+    caption(s, "Decoder cap", "Proposed decoders", "RED / LR-MoE", 7.85, capT, 2.1);
+    seg(s, "scr-amp", scr.r + 0.08, scr.cy, amp.x - 0.08, scr.cy);
+    seg(s, "amp-proc", amp.r + 0.08, scr.cy, 4.95, scr.cy);
+    seg(s, "proc-dec", 6.7, scr.cy, dec.x - 0.08, scr.cy);
+
+    // Bottom row: continuous control -> robot controller -> robotic arm, feedback to the user
+    const yB = 3.95, hB = 0.85, capB = 4.87;
+    const vel = glyph(s, "Velocity", ic.vel, 7.85, yB - 0.1, hB + 0.15, "Smoothed velocity commands toward a target");
+    box(s, "Controller", "Robot controller", "Cartesian velocity;\nworkspace and speed limits", 4.6, yB + 0.05, 1.95, 0.75, { fontSize: 12 });
+    const arm = glyph(s, "Robot arm", ic.arm, 1.4, yB - 0.05, hB + 0.1, "Robotic arm reaching for an object");
+    caption(s, "Vel cap", "Continuous control", "posterior every 200 ms → velocity\n∝ confidence, smoothed", 7.85, capB, 2.3);
+    caption(s, "Arm cap", "Robotic arm", "user watches it directly", 1.4, capB + 0.05, 1.9);
+    seg(s, "dec-vel", dec.x + dec.w / 2, capT + 0.45, vel.x + vel.w / 2, yB - 0.03);
+    seg(s, "vel-ctrl", vel.x - 0.08, vel.cy, 4.6 + 1.95, vel.cy);
+    seg(s, "ctrl-arm", 4.6, vel.cy, arm.r + 0.08, vel.cy);
+    const lx = 0.6;
+    seg(s, "feedback", lx, arm.cy, lx, scr.cy, { arrow: false, color: HEX.red, dash: "dash" });
+    seg(s, "feedback-h1", lx, arm.cy, arm.x - 0.02, arm.cy, { arrow: false, color: HEX.red, dash: "dash" });
+    seg(s, "feedback-h2", lx, scr.cy, scr.x - 0.03, scr.cy, { color: HEX.red });
+    text(s, "Feedback label", "visual feedback", { x: lx + 0.08, y: 3.5, w: 1.3, h: 0.3, fontSize: 11, italic: true,
+      color: C.accent1, valign: "middle" });
+
+    text(s, "Metrics", [
+      { text: "Online evaluation: ", options: { bold: true } },
+      { text: "accuracy · ITR · command latency · task success and completion time · path efficiency · workload (NASA-TLX)" },
+    ], { x: 0.6, y: 5.75, w: 8.2, h: 0.6, fontSize: 13, valign: "middle" });
+
+    // Foundation: preliminary system
+    const fx = 9.2, fw = 3.75;
+    text(s, "Foundation head", "Foundation: preliminary system", { x: fx, y: 1.75, w: fw, h: 0.35, fontSize: 15,
+      bold: true, color: C.accent1, valign: "middle" });
+    s.addShape(pres.shapes.RECTANGLE, { objectName: "Photo slot", x: fx, y: 2.15, w: fw, h: 2.1,
+      fill: { color: HEX.light }, line: { color: HEX.rule, width: 0.75, dashType: "dash" } });
+    text(s, "Photo slot text", "[Photo of the preliminary brain-controlled robotic arm system]",
+      { x: fx + 0.2, y: 2.15, w: fw - 0.4, h: 2.1, fontSize: 12, color: C.accent3, align: "center", valign: "middle" });
+    text(s, "Award", "[Competition name] · [Award] · [Year]", { x: fx, y: 4.32, w: fw, h: 0.35, fontSize: 14,
+      bold: true, align: "center", valign: "middle" });
+    text(s, "Foundation points", [
+      { text: "Existing pipeline: stimulation, EEG acquisition, decoding and robot control", options: { bullet: true, breakLine: true } },
+      { text: "Chapter 3 adds: aVEP interface, the proposed decoders, continuous control", options: { bullet: true } },
+    ], { x: fx, y: 4.75, w: fw, h: 1.7, fontSize: 13.5, paraSpaceAfter: 4 });
+
+    s.addNotes("~55 s. Chapter 3 closes the loop. The user watches the robot through the aVEP interface: tiny stimuli " +
+      "beside each command, so the workspace stays visible. EEG is streamed, filtered causally and cut into one epoch per " +
+      "stimulus pair, and the proposed decoders output a class probability every 200 ms. Instead of one discrete command " +
+      "per selection, these probabilities are accumulated into a smoothed velocity whose speed follows the decoder's " +
+      "confidence, so the arm moves continuously. The robot controller enforces workspace and speed limits. We evaluate " +
+      "online accuracy, ITR, latency, task success and workload. The starting point is our preliminary system, which won " +
+      "[award] at [competition]; Chapter 3 upgrades its interface, decoder and control scheme.");
+  }
+
   await pres.writeFile({ fileName: OUT });
   if (APPLY_THEME) {
     const { applyTheme } = require(APPLY_THEME);

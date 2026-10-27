@@ -180,3 +180,60 @@ exports.expert = async (tint = false) => {
   const body = cuboid(8, 18, 34, 54, 10, c) + arrow(56, 45, 80) + cuboid(84, 28, 40, 34, 10, c);
   return render(body, W, H);
 };
+
+// Robotic arm on a base, with gripper and a target object.
+exports.robotArm = async () => {
+  const W = 180, H = 150;
+  const body = `
+    <line x1="10" y1="138" x2="170" y2="138" stroke="#BFBFBF" stroke-width="3"/>
+    <path d="M40 138 L100 138 L90 116 L50 116 Z" fill="#595959"/>
+    <line x1="70" y1="116" x2="98" y2="48" stroke="#8C8C8C" stroke-width="16" stroke-linecap="round"/>
+    <line x1="98" y1="48" x2="146" y2="80" stroke="#8C8C8C" stroke-width="13" stroke-linecap="round"/>
+    <circle cx="70" cy="116" r="11" fill="${DARK}"/><circle cx="98" cy="48" r="10" fill="${DARK}"/><circle cx="146" cy="80" r="8" fill="${DARK}"/>
+    <line x1="141" y1="88" x2="136" y2="108" stroke="${DARK}" stroke-width="5" stroke-linecap="round"/>
+    <line x1="151" y1="88" x2="156" y2="108" stroke="${DARK}" stroke-width="5" stroke-linecap="round"/>
+    <rect x="133" y="114" width="26" height="24" fill="${RED}"/>`;
+  return render(body, W, H);
+};
+
+// Monitor showing the workspace with miniature aVEP stimuli beside a row of commands.
+exports.avepScreen = async () => {
+  const W = 200, H = 150;
+  let body = `<rect x="6" y="6" width="188" height="118" rx="4" fill="#F4F4F4" stroke="${DARK}" stroke-width="3"/>
+    <rect x="86" y="124" width="28" height="14" fill="${DARK}"/><rect x="62" y="138" width="76" height="6" fill="${DARK}"/>
+    <line x1="8" y1="84" x2="192" y2="84" stroke="#BFBFBF" stroke-width="2"/>
+    <path d="M70 84 L104 84 L99 74 L75 74 Z" fill="#595959"/>
+    <line x1="87" y1="74" x2="100" y2="42" stroke="#8C8C8C" stroke-width="8" stroke-linecap="round"/>
+    <line x1="100" y1="42" x2="126" y2="58" stroke="#8C8C8C" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="100" cy="42" r="5" fill="${DARK}"/><circle cx="126" cy="58" r="4" fill="${DARK}"/>
+    <rect x="120" y="70" width="12" height="14" fill="${RED}"/>`;
+  [30, 62, 94, 126, 158].forEach((x) => {
+    body += `<rect x="${x - 6}" y="104" width="12" height="8" fill="#808080"/>
+      <rect x="${x - 13}" y="106" width="4" height="4" fill="${RED}"/><rect x="${x + 9}" y="106" width="4" height="4" fill="${RED}"/>`;
+  });
+  return render(body, W, H);
+};
+
+// EEG amplifier streaming several channels.
+exports.amplifier = async () => {
+  const W = 170, H = 110;
+  let body = `<rect x="6" y="10" width="158" height="90" rx="6" fill="#F2F2F2" stroke="${DARK}" stroke-width="2.5"/>`;
+  for (let i = 0; i < 4; i++) {
+    body += `<path d="${path((t) => noise(t, i + 4), 18, 134, 30 + i * 18, 6)}" fill="none" stroke="${i === 1 ? RED : DARK}" stroke-width="1.6"/>`;
+  }
+  return render(body, W, H);
+};
+
+// Continuous control: a 2-D velocity vector field over a target.
+exports.velocity = async () => {
+  const W = 150, H = 120;
+  let body = `<circle cx="112" cy="40" r="10" fill="none" stroke="${RED}" stroke-width="2.5"/>
+    <circle cx="112" cy="40" r="3" fill="${RED}"/>
+    <path d="M18 104 C 40 96, 60 70, 80 62 S 100 48, 104 46" fill="none" stroke="${DARK}" stroke-width="2.5" stroke-dasharray="5 4"/>`;
+  [[18, 104, 34, 92], [48, 84, 64, 70], [78, 62, 94, 52]].forEach(([x1, y1, x2, y2]) => {
+    const a = Math.atan2(y2 - y1, x2 - x1);
+    body += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${RED}" stroke-width="3"/>
+      <polygon points="${x2},${y2} ${x2 - 9 * Math.cos(a - 0.45)},${y2 - 9 * Math.sin(a - 0.45)} ${x2 - 9 * Math.cos(a + 0.45)},${y2 - 9 * Math.sin(a + 0.45)}" fill="${RED}"/>`;
+  });
+  return render(body, W, H);
+};
