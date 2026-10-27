@@ -5,6 +5,7 @@
 
 const path = require("path");
 const pptxgen = require("pptxgenjs");
+const sharp = require("sharp");
 
 const OUT = process.argv[2] || path.join(__dirname, "midterm_defense_sample.pptx");
 const APPLY_THEME = process.argv[3];
@@ -136,6 +137,26 @@ function screen(slide, name, x, y, w, h, lit) {
   });
 }
 
+// Schematic workspace (table, robotic arm, two objects) as a PNG, 16:10.
+async function workspaceScene() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 800 500">
+    <rect width="800" height="500" fill="#F4F4F4"/>
+    <rect y="360" width="800" height="140" fill="#E3E3E3"/>
+    <line x1="0" y1="360" x2="800" y2="360" stroke="#BFBFBF" stroke-width="3"/>
+    <path d="M250 360 L350 360 L335 328 L265 328 Z" fill="#595959"/>
+    <line x1="300" y1="330" x2="380" y2="190" stroke="#8C8C8C" stroke-width="24" stroke-linecap="round"/>
+    <line x1="380" y1="190" x2="500" y2="255" stroke="#8C8C8C" stroke-width="20" stroke-linecap="round"/>
+    <circle cx="300" cy="330" r="17" fill="#404040"/><circle cx="380" cy="190" r="16" fill="#404040"/>
+    <circle cx="500" cy="255" r="13" fill="#404040"/>
+    <line x1="492" y1="266" x2="484" y2="302" stroke="#404040" stroke-width="7" stroke-linecap="round"/>
+    <line x1="508" y1="266" x2="516" y2="302" stroke="#404040" stroke-width="7" stroke-linecap="round"/>
+    <rect x="478" y="315" width="44" height="44" fill="#A00000"/>
+    <rect x="610" y="300" width="42" height="60" rx="4" fill="#7F7F7F"/>
+  </svg>`;
+  const buf = await sharp(Buffer.from(svg)).png().toBuffer();
+  return "image/png;base64," + buf.toString("base64");
+}
+
 // Booktabs-style table cell: rules only where asked.
 function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, align = "left", fontSize = 16 } = {}) {
   const b = (pt) => (pt ? { type: "solid", pt, color: HEX.black } : { type: "none" });
@@ -162,53 +183,113 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
   pres.addSection({ title: SECTIONS[0] });
   outlineSlide(0, "~5 s. Four parts: background and objectives, progress, next-stage plan, schedule.");
 
-  // ===== 3. Background: paradigm =====
+  // ===== 3. Background: visual BCI paradigms =====
   {
     const s = pres.addSlide({ masterName: "CONTENT", sectionTitle: SECTIONS[0] });
     s.addText(sectionTitle(0), { placeholder: "title" });
 
-    // (a) stimulus layout
-    screen(s, "Screen", 0.6, 1.65, 3.6, 2.4, null);
-    text(s, "Caption a", "(a) Miniature stimuli flank the fixation point", {
-      x: 0.6, y: 4.15, w: 3.6, h: 0.35, fontSize: 14, align: "center" });
-
-    // (b) the two classes are the order of the two lateral stimuli
-    const bx = 4.55;
-    text(s, "Caption b head", "(b) One trial = one stimulus pair", {
-      x: bx, y: 1.6, w: 3.6, h: 0.35, fontSize: 14, align: "center" });
-    [["Class 0:  left → right", "L", "R"], ["Class 1:  right → left", "R", "L"]].forEach(([lbl, a, b], i) => {
-      const y = 2.05 + i * 1.25;
-      screen(s, `Class ${i} first`, bx + 0.15, y, 1.2, 0.8, a);
-      arrowRight(s, `Class ${i} arrow`, bx + 1.45, y + 0.4, 0.55);
-      screen(s, `Class ${i} second`, bx + 2.1, y, 1.2, 0.8, b);
-      text(s, `Class ${i} label`, lbl, { x: bx + 0.15, y: y + 0.85, w: 3.15, h: 0.3, fontSize: 14,
+    // Three panels: the same robotic-arm workspace seen through each paradigm's stimulus layout.
+    const pw = 3.95, ph = 2.47, gap = 0.2, py = 1.72;
+    const pxs = [0, 1, 2].map((i) => 0.55 + i * (pw + gap));
+    const scene = await workspaceScene();
+    const heads = ["(a) SSVEP [1]", "(b) Oddball (P300) [2]", "(c) aVEP [3]"];
+    pxs.forEach((px, i) => {
+      text(s, `Panel ${i} head`, heads[i], { x: px, y: 1.27, w: pw, h: 0.4, fontSize: 16, bold: true,
         align: "center", valign: "middle" });
+      s.addImage({ objectName: `Panel ${i} scene`, data: scene, x: px, y: py, w: pw, h: ph,
+        altText: "Schematic workspace: robotic arm and objects on a table" });
     });
 
-    text(s, "Dataset", [
-      { text: "Dataset: ", options: { bold: true } },
-      { text: "28 subjects × 6 sessions × 480 trials; 21 parieto-occipital channels, 200 Hz; " +
-        "stimulus pairs presented every 200 ms" },
-    ], { x: 0.6, y: 4.85, w: 7.5, h: 0.8, fontSize: 16 });
+    // (a) SSVEP: 12 large targets, each flickering at its own frequency
+    {
+      const px = pxs[0], cw = 0.72, ch = 0.56, gx = (pw - 4 * cw) / 5, gy = (ph - 3 * ch) / 4;
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) {
+        const f = (8 + 0.5 * (r * 4 + c)).toFixed(1);
+        s.addText(`${f} Hz`, { objectName: `SSVEP target ${r * 4 + c}`, shape: pres.shapes.RECTANGLE,
+          x: px + gx + c * (cw + gx), y: py + gy + r * (ch + gy), w: cw, h: ch,
+          fill: { color: HEX.white }, line: { color: "A6A6A6", width: 0.75 },
+          fontSize: 11, color: C.text1, align: "center", valign: "middle", margin: 0 });
+      }
+    }
 
-    // Right text column
-    const items = [
-      ["Visual BCIs", "High speed, but large flashing stimuli cause visual fatigue"],
-      ["Miniature lateral stimuli [1]", "Small and unobtrusive, so more comfortable to use"],
-      ["Cost", "Very weak response: class difference ≈ 1 µV"],
-      ["Task", "Decode the stimulus order (left→right vs right→left) from a single trial"],
+    // (b) Oddball: 6 x 6 symbol matrix, one row intensified
+    {
+      const mx = pxs[1] + 0.35, mw = pw - 0.7, my = py + 0.12, mh = ph - 0.24;
+      s.addShape(pres.shapes.RECTANGLE, { objectName: "P300 matrix bg", x: mx, y: my, w: mw, h: mh,
+        fill: { color: "1A1A1A" }, line: { type: "none" } });
+      const sym = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789_";
+      const cw = mw / 6, ch = mh / 6, flash = 2;
+      s.addShape(pres.shapes.RECTANGLE, { objectName: "P300 flashed row", x: mx, y: my + flash * ch, w: mw, h: ch,
+        fill: { color: "595959" }, line: { type: "none" } });
+      for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) {
+        s.addText(sym[r * 6 + c], { objectName: `P300 cell ${r * 6 + c}`, x: mx + c * cw, y: my + r * ch, w: cw, h: ch,
+          fontSize: 13, bold: r === flash, color: r === flash ? HEX.white : "8C8C8C",
+          align: "center", valign: "middle", margin: 0, isTextBox: true });
+      }
+    }
+
+    // (c) aVEP: small command labels with miniature lateral stimuli; the scene stays visible
+    {
+      const px = pxs[2], cmds = ["↑", "↓", "←", "→", "Grasp"];
+      const cw = (pw - 0.3) / cmds.length, y = py + ph - 0.32;
+      cmds.forEach((cmd, i) => {
+        const x = px + 0.15 + i * cw;
+        text(s, `aVEP command ${i}`, cmd, { x, y, w: cw, h: 0.24, fontSize: 11, align: "center", valign: "middle" });
+        const half = cmd.length > 1 ? 0.2 : 0.07, sq = 0.05;
+        [x + cw / 2 - half - 0.04 - sq, x + cw / 2 + half + 0.04].forEach((sx, j) =>
+          s.addShape(pres.shapes.RECTANGLE, { objectName: `aVEP stimulus ${i}${j ? "R" : "L"}`,
+            x: sx, y: y + 0.12 - sq / 2, w: sq, h: sq, fill: { color: HEX.red }, line: { type: "none" } }));
+      });
+    }
+
+    // Panel captions: what the stimuli are, and the visual burden
+    const caps = [
+      ["Large flickering targets, one frequency each", "High visual burden: view largely occluded", HEX.red],
+      ["Flashing rows / columns of a symbol matrix", "High visual burden: view largely occluded", HEX.red],
+      ["Miniature stimuli beside each command", "Low visual burden: environment stays visible", "1E7B34"],
     ];
-    text(s, "Background points", items.flatMap(([h, d], i) => [
-      { text: h, options: { bold: true, breakLine: true } },
-      { text: d, options: { breakLine: i < items.length - 1 } },
-      ...(i < items.length - 1 ? [{ text: " ", options: { fontSize: 8, breakLine: true } }] : []),
-    ]), { x: 8.45, y: 1.65, w: 4.5, h: 4.6, fontSize: 18 });
+    pxs.forEach((px, i) => text(s, `Panel ${i} caption`, [
+      { text: caps[i][0], options: { breakLine: true } },
+      { text: caps[i][1], options: { bold: true, color: caps[i][2] } },
+    ], { x: px, y: py + ph + 0.06, w: pw, h: 0.62, fontSize: 14, align: "center" }));
 
-    reference(s, "[1] M. Xu et al. A Brain–Computer Interface Based on Miniature-Event-Related Potentials " +
-      "Induced by Very Small Lateral Visual Stimuli. IEEE Trans. Biomed. Eng., 2018.");
-    s.addNotes("~45 s. Visual BCIs are fast, but large flashing stimuli are tiring. Miniature lateral stimuli are " +
-      "comfortable, but the response is tiny. Each trial is a pair of stimuli; the task is to decode whether it went " +
-      "left→right or right→left from a single trial. (One sentence on the topic change, if needed.)");
+    // Bottom left: how aVEP encodes a command bit (this thesis decodes it)
+    const by = 4.98, bh = 1.47;
+    s.addShape(pres.shapes.RECTANGLE, { objectName: "Coding panel", x: 0.55, y: by, w: 6.0, h: bh,
+      fill: { color: HEX.light }, line: { type: "none" } });
+    text(s, "Coding head", "aVEP coding [3]: stimulus order = code", { x: 0.75, y: by + 0.1, w: 5.6, h: 0.35, fontSize: 16, bold: true });
+    [["L", "R", "= code 0"], ["R", "L", "= code 1"]].forEach(([a, b, lbl], i) => {
+      const x = 0.75 + i * 2.95, y = by + 0.45;
+      screen(s, `Code ${i} first`, x, y, 0.6, 0.4, a);
+      arrowRight(s, `Code ${i} arrow`, x + 0.65, y + 0.2, 0.3);
+      screen(s, `Code ${i} second`, x + 1.0, y, 0.6, 0.4, b);
+      text(s, `Code ${i} label`, lbl, { x: x + 1.7, y, w: 1.2, h: 0.4, fontSize: 14, valign: "middle" });
+    });
+    text(s, "Coding task", "Task: decode each pair (one every 200 ms) from single-trial EEG", {
+      x: 0.75, y: by + 1.1, w: 5.6, h: 0.3, fontSize: 14, italic: true });
+
+    // Bottom right: application
+    s.addShape(pres.shapes.RECTANGLE, { objectName: "Application panel", x: 6.75, y: by, w: 6.0, h: bh,
+      fill: { color: HEX.light }, line: { type: "none" } });
+    text(s, "Application", [
+      { text: "Application", options: { bold: true, breakLine: true } },
+      { text: "Robotic arms, unmanned vehicles: the user must keep watching the environment while issuing commands",
+        options: { breakLine: true } },
+      { text: "→ Chapter 3: online aVEP-based robotic arm", options: { bold: true, color: C.accent1 } },
+    ], { x: 6.95, y: by + 0.1, w: 5.6, h: bh - 0.2, fontSize: 16, paraSpaceAfter: 2 });
+
+    s.addText([
+      { text: "[1] X. Chen et al., PNAS, 2015.   [2] L. A. Farwell, E. Donchin, Electroencephalogr. Clin. " +
+        "Neurophysiol., 1988.", options: { breakLine: true } },
+      { text: "[3] M. Xu et al., IEEE Trans. Biomed. Eng., 2018.   Panels (a)–(c) are schematic illustrations." },
+    ], { objectName: "Reference", x: 0.35, y: 6.55, w: 11.9, h: 0.8, fontSize: 12, color: C.accent3,
+      valign: "bottom", margin: 0, isTextBox: true });
+
+    s.addNotes("~50 s. Traditional visual BCIs use large stimuli: SSVEP needs big flickering targets, the P300 " +
+      "speller a flashing symbol matrix. Both cover most of the view, so the user cannot watch the robot or the " +
+      "road. aVEP uses tiny stimuli beside each command: a left→right pair is code 0, right→left code 1. The scene " +
+      "stays visible, which is what device control needs; this is the goal of Chapter 3. The cost is a very weak " +
+      "signal, shown next.");
   }
 
   // ===== 4. Background: observations =====
