@@ -41,10 +41,14 @@ class EEGNet(nn.Module):
             raise ValueError(f"n_times={n_times} too short for pooling {pool1}x{pool2}")
         self.classifier = nn.Linear(n_feat, n_classes)
 
+    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """x: (batch, channels, times) -> (block-1 output (batch, F1*D, 1, times/pool1), features (batch, n_feat))."""
+        h1 = self.block1b(self.spatial(self.block1(x.unsqueeze(1))))
+        return h1, self.block2(h1)
+
     def features(self, x: torch.Tensor) -> torch.Tensor:
         """x: (batch, channels, times) -> (batch, n_feat)."""
-        x = self.block1(x.unsqueeze(1))
-        return self.block2(self.block1b(self.spatial(x)))
+        return self.encode(x)[1]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.classifier(self.features(x))

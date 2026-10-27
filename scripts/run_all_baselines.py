@@ -30,7 +30,7 @@ def main() -> None:
     (ROOT / "logs").mkdir(exist_ok=True)
     for seed in args.seeds:
         for method in args.methods:
-            if method != "eegnet" and seed != args.seeds[0]:
+            if method.startswith("dcpm") and seed != args.seeds[0]:
                 continue                          # DCPM is deterministic: one seed is enough
             for protocol in args.protocols:
                 cmd = [sys.executable, "-u", str(ROOT / "scripts/run_baseline.py"), "--method", method,
