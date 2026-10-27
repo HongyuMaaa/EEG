@@ -1,0 +1,59 @@
+{
+  "method": "dcpm",
+  "protocol": "pooled",
+  "seed": 0,
+  "method_config": {
+    "n_components_grid": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "reg": 1e-06,
+    "context": true
+  },
+  "preprocessing_fingerprint": "e05e4379886f",
+  "preprocessing_config": {
+    "data_dir": "Data",
+    "output_dir": "derivatives/preprocessed",
+    "montage_file": "Data/64-channels.loc",
+    "native_sfreq": 200.0,
+    "n_channels": 21,
+    "filter": {
+      "l_freq": 1.0,
+      "h_freq": 30.0,
+      "l_trans_bandwidth": 1.0,
+      "h_trans_bandwidth": 7.5,
+      "filter_length": "auto",
+      "fir_window": "hamming",
+      "fir_design": "firwin",
+      "phase": "zero"
+    },
+    "bad_channels": {
+      "std_ratio_threshold": 3.0,
+      "max_iterations": 3,
+      "interpolation": "spherical_spline"
+    },
+    "reference": "average",
+    "epoch": {
+      "tmin": 0.05,
+      "tmax": 0.34,
+      "baseline": null
+    },
+    "target_sfreq": 200.0,
+    "artifact": {
+      "ptp_threshold_uv": 100.0
+    }
+  },
+  "git_commit": "a0ee08c9c4e3719b82fc69e78b37f9c50f7b811b",
+  "device": "cpu",
+  "gpu": null,
+  "environment": {
+    "python": "3.9.21",
+    "torch": "2.6.0+cu124",
+    "numpy": "1.26.4",
+    "platform": "Windows-10-10.0.26200-SP0"
+  },
+  "max_epochs_override": null,
+  "started": "2026-10-27 00:03:25"
+}

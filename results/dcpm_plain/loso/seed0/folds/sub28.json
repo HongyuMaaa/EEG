@@ -1,0 +1,39 @@
+{
+  "fold": "sub28",
+  "test_session": null,
+  "val_subjects": [
+    1,
+    2,
+    3
+  ],
+  "val_session": null,
+  "train_sessions": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "accuracy": 0.7055555555555556,
+  "per_subject": {
+    "28": {
+      "accuracy": 0.7055555555555556,
+      "n_test": 2880
+    }
+  },
+  "n_components": 1,
+  "val_acc": 0.63834220884464,
+  "val_acc_grid": {
+    "1": 0.63834220884464,
+    "2": 0.586709886547812,
+    "4": 0.5764065755962028,
+    "8": 0.5542949756888168
+  },
+  "train_time_s": 10.3,
+  "n_train": 69103,
+  "n_val": 8638,
+  "n_test": 2880,
+  "device": "cpu",
+  "git_commit": "a0ee08c9c4e3719b82fc69e78b37f9c50f7b811b"
+}
