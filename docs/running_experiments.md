@@ -82,7 +82,7 @@ This must print `True` and `NVIDIA GeForce RTX 3060`.
 
 ```bash
 python scripts/preprocess.py          # ~1 min -> derivatives/preprocessed/
-python -m pytest -q tests             # ~5 s; expect "8 passed"
+python -m pytest -q tests             # ~5 s; expect "10 passed"
 ```
 
 `python scripts/verify_preprocessing.py` (about 6 minutes) is optional. It regenerates
@@ -174,10 +174,56 @@ Useful options:
 
 ---
 
+## 3b. Chapter 1 (RED) experiments
+
+Run these after the baselines; the setup is the same. Method names and their meaning are listed in
+`docs/chapter1_red.md`.
+
+**Step 1 — re-run the EEGNet baseline with the raised epoch caps.** In the first run, all
+`pooled` folds and 33 `within` folds stopped at the epoch cap. The caps are now 500
+(`configs/eegnet.yaml`), so the baseline is fully converged before RED is compared against it.
+
+```bash
+git pull
+python scripts/run_baseline.py --method eegnet --protocol within --device cuda --overwrite
+python scripts/run_baseline.py --method eegnet --protocol pooled --device cuda --overwrite
+```
+
+**Step 2 — RED and its ablations** (`within` first, the primary protocol):
+
+```bash
+python scripts/run_all_baselines.py --device cuda --methods red red_n2n red_critic red_classmean kd_naive --protocols within
+```
+
+- The first variant also trains the fold's teacher; the other variants reuse it from
+  `checkpoints/teacher/`.
+- Expect roughly 2–3× the EEGNet time for `red`, less for the other variants.
+
+**Step 3 — pooled protocol** (secondary):
+
+```bash
+python scripts/run_all_baselines.py --device cuda --methods red red_n2n kd_naive --protocols pooled
+```
+
+**Step 4 — compare, then commit as in section 4:**
+
+```bash
+python scripts/compare_methods.py --protocol within --out results/compare_within.md
+python scripts/compare_methods.py --protocol pooled --out results/compare_pooled.md
+```
+
+The comparison lists, for each method:
+- the paired difference to EEGNet;
+- the number of subjects improved;
+- the Wilcoxon p-value;
+- the teacher's accuracy on single trials and averages;
+- how well single trials reconstruct their group ERP (R²).
+
 ## 4. Check, commit and push the results
 
 ```bash
 python scripts/summarize_results.py   # rebuilds results/summary.md, summary.csv, summary_per_subject.csv
+python scripts/compare_methods.py --protocol within --out results/compare_within.md   # once RED runs exist
 ```
 
 Open `results/summary.md` and check the **Run status** table:

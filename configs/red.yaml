@@ -1,0 +1,31 @@
+# Chapter 1: Recoverable-ERP Distillation (RED). Documented in docs/chapter1_red.md.
+# Student and teacher share the EEGNet architecture of configs/eegnet.yaml (model block).
+
+teacher:
+  k_set: [2, 3, 6]        # trials per average, sampled uniformly per group and epoch (capped at group size)
+  draws_per_epoch: 6      # random averages per group per epoch (~ number of single trials)
+  val_k: 3                # validation averages use k = 3 (fixed draws)
+  max_epochs: 300
+  patience: 40
+  always_train: true      # also train (and report) the teacher for variants that do not use it
+
+loss:
+  lambda_n2n: 1.0         # weight of the Noise2Noise reconstruction loss
+  beta_lateral: 1.0       # extra weight of the left-minus-right (mirror-pair) part of the reconstruction error
+  lambda_critic: 0.5      # weight of the teacher-as-critic loss
+  lambda_kd: 1.0          # weight of naive logit distillation (kd_naive ablation only)
+  tau: 2.0                # distillation temperature
+
+# Student training per protocol (same as the EEGNet baseline settings)
+training:
+  within:  {dropout: 0.5,  batch_size: 64,  lr: 0.001, max_epochs: 500, patience: 50}
+  pooled:  {dropout: 0.25, batch_size: 256, lr: 0.001, max_epochs: 500, patience: 30}
+  loso:    {dropout: 0.25, batch_size: 256, lr: 0.001, max_epochs: 150, patience: 20}
+
+# Method name -> which loss terms are on. All variants share the cached teacher of each fold.
+variants:
+  red:            {n2n: true,  critic: true,  kd_naive: false, target: group_loo}   # full method
+  red_n2n:        {n2n: true,  critic: false, kd_naive: false, target: group_loo}   # reconstruction only
+  red_critic:     {n2n: false, critic: true,  kd_naive: false, target: group_loo}   # critic only
+  red_classmean:  {n2n: true,  critic: true,  kd_naive: false, target: class_mean}  # context-marginalised target
+  kd_naive:       {n2n: false, critic: false, kd_naive: true,  target: group_loo}   # classic distillation from averages

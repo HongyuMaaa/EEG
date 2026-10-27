@@ -16,14 +16,14 @@ training:
     dropout: 0.5
     batch_size: 64
     lr: 0.001
-    max_epochs: 300
+    max_epochs: 500    # raised from 300: 33/168 folds of the first run hit the cap
     patience: 50       # early stopping on validation loss; best epoch is restored
   pooled:
     dropout: 0.25
     batch_size: 256
     lr: 0.001
-    max_epochs: 150
-    patience: 20
+    max_epochs: 500    # raised from 150: all 6 folds of the first run hit the cap (best epochs 133-148)
+    patience: 30
   loso:
     dropout: 0.25
     batch_size: 256

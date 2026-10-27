@@ -1,4 +1,4 @@
-"""Train and evaluate a baseline on one evaluation protocol, saving models and results.
+"""Train and evaluate a baseline or a Chapter 1 (RED) variant on one evaluation protocol, saving models and results.
 
 Usage examples:
     python scripts/run_baseline.py --method eegnet --protocol within --device cuda
@@ -6,6 +6,7 @@ Usage examples:
     python scripts/run_baseline.py --method eegnet --protocol within --subjects 1 2 --sessions 1 --max-epochs 5   # smoke test
 
 Methods:   eegnet | dcpm (with context templates, as in the paper) | dcpm_plain (without)
+           red | red_n2n | red_critic | red_classmean | kd_naive   (Chapter 1, see configs/red.yaml)
 Protocols: within | pooled | loso   (see aved/data.py)
 
 Outputs (finished folds are skipped on re-run, so an interrupted run can simply be restarted):
@@ -16,11 +17,13 @@ Outputs (finished folds are skipped on re-run, so an interrupted run can simply 
         history/<fold>.csv     EEGNet training curves
         subject_results.csv    accuracy per test subject (and test session), rebuilt after every fold
     checkpoints/<method>/<protocol>/seed<seed>/<fold>.pt   trained model (torch.save; DCPM is pickled)
+    checkpoints/teacher/<protocol>/seed<seed>/<config hash>/<fold>.pt   Chapter 1 teacher, shared by all RED variants
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import platform
 import subprocess
@@ -38,8 +41,10 @@ sys.path.insert(0, str(ROOT))
 from aved.config import load_config  # noqa: E402
 from aved.data import PROTOCOLS, SESSIONS, SUBJECTS, fold_subjects, load_dataset, make_folds  # noqa: E402
 from aved.train import resolve_device, train_dcpm, train_eegnet  # noqa: E402
+from aved.train_red import train_red  # noqa: E402
 
-METHODS = ("eegnet", "dcpm", "dcpm_plain")
+RED_METHODS = tuple(yaml.safe_load((ROOT / "configs/red.yaml").read_text())["variants"])
+METHODS = ("eegnet", "dcpm", "dcpm_plain") + RED_METHODS
 
 
 def git_commit() -> str:
@@ -78,12 +83,26 @@ def main() -> None:
         sys.exit(f"preprocessed data (config {data_fp}) do not match {args.preprocess_config} "
                  f"({pre_cfg.fingerprint()}): re-run `python scripts/preprocess.py`")
 
+    teacher_dir = None
     if args.method == "eegnet":
         cfg = yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())
         method_cfg = {"model": cfg["model"], "training": dict(cfg["training"][args.protocol])}
         if args.max_epochs:
             method_cfg["training"]["max_epochs"] = args.max_epochs
         device = resolve_device(args.device)
+    elif args.method in RED_METHODS:
+        red = yaml.safe_load((ROOT / "configs/red.yaml").read_text())
+        method_cfg = {"model": yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())["model"],
+                      "training": dict(red["training"][args.protocol]), "teacher": dict(red["teacher"]),
+                      "loss": red["loss"], "variant": red["variants"][args.method]}
+        if args.max_epochs:
+            method_cfg["training"]["max_epochs"] = args.max_epochs
+            method_cfg["teacher"]["max_epochs"] = args.max_epochs
+        device = resolve_device(args.device)
+        teacher_key = json.dumps({k: method_cfg[k] for k in ("model", "training", "teacher")} | {"data": data_fp},
+                                 sort_keys=True)
+        teacher_dir = (ROOT / args.checkpoint_dir / "teacher" / args.protocol / f"seed{args.seed}"
+                       / hashlib.sha256(teacher_key.encode()).hexdigest()[:10])
     else:
         method_cfg = yaml.safe_load((ROOT / "configs/dcpm.yaml").read_text())
         method_cfg["context"] = args.method == "dcpm"
@@ -119,8 +138,13 @@ def main() -> None:
             cache[subjects] = load_dataset(data_dir, subjects)
         ds = cache[subjects]
         print(f"[{i}/{len(todo)}] fold {fold.name}", flush=True)
-        out = (train_eegnet(fold, ds, method_cfg["model"], method_cfg["training"], device, args.seed)
-               if args.method == "eegnet" else train_dcpm(fold, ds, method_cfg))
+        if args.method == "eegnet":
+            out = train_eegnet(fold, ds, method_cfg["model"], method_cfg["training"], device, args.seed)
+        elif args.method in RED_METHODS:
+            out = train_red(fold, ds, method_cfg, method_cfg["variant"], device, args.seed,
+                            teacher_dir / f"{fold.name}.pt")
+        else:
+            out = train_dcpm(fold, ds, method_cfg)
         out["info"].update(device=str(device), git_commit=run_info["git_commit"])
         save_fold(fold, ds, out, run_dir, ckpt_dir)
         write_subject_results(run_dir)

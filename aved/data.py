@@ -43,11 +43,13 @@ class Dataset:
     ch_names: list[str]
     sfreq: float
     times: np.ndarray
+    group: np.ndarray | None = None   # (n,) averaging group: same subject, session, character and bit position,
+                                      # i.e. the (up to) 6 repetitions of one code bit; same label and context
 
     def subset(self, mask: np.ndarray) -> "Dataset":
         return Dataset(self.X[mask], self.y[mask], self.subject[mask], self.session[mask],
                        self.trial[mask], self.prev_y[mask], self.next_y[mask], self.ch_names, self.sfreq,
-                       self.times)
+                       self.times, None if self.group is None else self.group[mask])
 
     def __len__(self) -> int:
         return len(self.y)
@@ -63,6 +65,7 @@ def load_dataset(data_dir: str | Path, subjects=SUBJECTS, drop_artifacts: bool =
         parts.append(dict(
             X=d["X"][keep], y=y[keep], subject=np.full(keep.sum(), s), session=d["session"][keep],
             trial=np.flatnonzero(keep), prev_y=prev_y[keep], next_y=next_y[keep],
+            group=(s * 100_000 + d["session"] * 1000 + d["char_pos"] * 10 + d["bit_pos"])[keep],
         ))
         meta = (list(d["ch_names"]), float(d["sfreq"]), d["times"])
     cat = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}

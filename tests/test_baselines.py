@@ -79,3 +79,24 @@ def test_dcpm_learns_lateralised_pattern(context):
     prev_y, next_y = rng.integers(0, 2, n), rng.integers(0, 2, n)
     clf = DCPM(2, context).fit(X[:300], y[:300], prev_y[:300], next_y[:300])
     assert (clf.predict(X[300:]) == y[300:]).mean() > 0.9
+
+
+def test_group_bank_loo_excludes_self_and_averages_correctly():
+    from aved.train_red import GroupBank
+    rng = np.random.default_rng(0)
+    group = np.array([5, 5, 5, 7, 7, 9])                     # group 9 has a single member
+    X = torch.as_tensor(rng.normal(size=(6, 2, 3)), dtype=torch.float32)
+    bank = GroupBank(group, torch.device("cpu"))
+    loo, valid = bank.loo_targets(X)
+    assert valid.tolist() == [True, True, True, True, True, False]
+    assert torch.allclose(loo[0], (X[1] + X[2]) / 2) and torch.allclose(loo[3], X[4])
+    y = torch.tensor([0, 0, 0, 1, 1, 1])
+    avg, ya = bank.sample_averages(X, y, [2], torch.Generator().manual_seed(0))
+    assert avg.shape == (2, 2, 3) and ya.tolist() == [0, 1]   # single-member group skipped
+    assert torch.allclose(avg[1], (X[3] + X[4]) / 2)         # k capped at group size 2
+
+
+def test_red_student_shapes():
+    from aved.models.red import REDStudent
+    logits, recon = REDStudent(21, 58)(torch.zeros(4, 21, 58))
+    assert logits.shape == (4, 2) and recon.shape == (4, 21, 58)
