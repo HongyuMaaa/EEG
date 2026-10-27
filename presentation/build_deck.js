@@ -857,6 +857,102 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
       "[award] at [competition]; Chapter 3 upgrades its interface, decoder and control scheme.");
   }
 
+  // ===== 15. Outline: part 4 =====
+  pres.addSection({ title: SECTIONS[3] });
+  outlineSlide(3, "~3 s.");
+
+  // ===== 16. Project schedule (Gantt) =====
+  {
+    const s = pres.addSlide({ masterName: "CONTENT", sectionTitle: SECTIONS[3] });
+    s.addText(sectionTitle(3), { placeholder: "title" });
+
+    const months = ["Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May"];
+    const gx = 4.75, gw = 8.0, mw = gw / months.length, top = 1.42, rowH = 0.355, y0 = 2.12;
+    // date -> x: m = month index from Nov 2026, d = day of month
+    const X = (m, d = 1) => gx + (m + (d - 1) / 30) * mw;
+
+    // Header: years and months
+    text(s, "Year 2026", "2026", { x: X(0), y: top, w: 2 * mw, h: 0.3, fontSize: 13, bold: true, align: "center", valign: "middle" });
+    text(s, "Year 2027", "2027", { x: X(2), y: top, w: 5 * mw, h: 0.3, fontSize: 13, bold: true, align: "center", valign: "middle" });
+    months.forEach((mo, i) => text(s, `Month ${mo}`, mo, { x: X(i), y: top + 0.32, w: mw, h: 0.3, fontSize: 13,
+      align: "center", valign: "middle" }));
+    seg(s, "Header rule", 0.6, y0 - 0.06, gx + gw, y0 - 0.06, { arrow: false, width: 1.5 });
+
+    const groups = [
+      ["Chapter 1\nRED", HEX.red, [
+        ["Full comparisons on all protocols", [0, 1], [1, 15]],
+        ["Ablation, robustness, statistics", [1, 1], [2, 15]],
+      ]],
+      ["Chapter 2\nLR-MoE", "C55A5A", [
+        ["Implementation and LOSO experiments", [0, 15], [2, 31]],
+        ["Ablation, few-shot, routing analysis", [2, 1], [3, 28]],
+      ]],
+      ["Chapter 3\nOnline system", "404040", [
+        ["Ethics approval, subject recruitment", [1, 1], [2, 31]],
+        ["Real-time system integration", [1, 1], [3, 15]],
+        ["Continuous control, pilot tests", [3, 1], [4, 15]],
+        ["Online experiments and evaluation", [4, 1], [5, 15]],
+      ]],
+      ["Thesis", "A6A6A6", [
+        ["Papers for Chapters 1 and 2", [2, 15], [4, 31]],
+        ["Thesis writing", [3, 15], [5, 20]],
+        ["Revision and defense preparation", [5, 15], [6, 31]],
+      ]],
+    ];
+
+    let row = 0;
+    groups.forEach(([gname, color, tasks], gi) => {
+      const gy = y0 + row * rowH;
+      if (gi % 2 === 0) s.addShape(pres.shapes.RECTANGLE, { objectName: `Group ${gi + 1} band`, x: 0.6, y: gy,
+        w: gx + gw - 0.6, h: tasks.length * rowH, fill: { color: HEX.light }, line: { type: "none" } });
+      text(s, `Group ${gi + 1} name`, gname, { x: 0.65, y: gy, w: 1.3, h: tasks.length * rowH, fontSize: 12.5, bold: true,
+        color: gi === 0 ? C.accent1 : C.text1, valign: "middle" });
+      tasks.forEach(([tname, [m1, d1], [m2, d2]], ti) => {
+        const y = y0 + row * rowH;
+        text(s, `Task ${row + 1} name`, tname, { x: 1.95, y, w: 2.75, h: rowH, fontSize: 12, valign: "middle" });
+        const x1 = X(m1, d1), x2 = X(m2, Math.min(d2, 30) + 1);
+        s.addShape(pres.shapes.RECTANGLE, { objectName: `Task ${row + 1} bar`, x: x1, y: y + 0.07, w: x2 - x1, h: rowH - 0.14,
+          fill: { color }, line: { type: "none" } });
+        row++;
+      });
+    });
+    const yEnd = y0 + row * rowH;
+    months.forEach((_, i) => { if (i) seg(s, `Month line ${i}`, X(i), y0 - 0.06, X(i), yEnd, { arrow: false, color: HEX.rule, width: 0.5, dash: "dash" }); });
+    seg(s, "Bottom rule", 0.6, yEnd + 0.02, gx + gw, yEnd + 0.02, { arrow: false, width: 1.5 });
+
+    // Milestones: diamond at the date, on the row of the task it closes
+    const ms = [
+      ["M1", 1, [2, 15], "Chapter 1 results complete"],
+      ["M2", 3, [3, 28], "Chapter 2 results complete"],
+      ["M3", 6, [4, 15], "online system demo"],
+      ["M4", 7, [5, 15], "online experiments complete"],
+      ["M5", 9, [5, 20], "thesis draft to supervisor"],
+      ["M6", 10, [6, 28], "final defense"],
+    ];
+    ms.forEach(([id, r, [m, d]]) => {
+      const cx = X(m, d + 1), cy = y0 + r * rowH + rowH / 2, sz = 0.24;
+      s.addShape(pres.shapes.DIAMOND, { objectName: `${id} diamond`, x: cx - sz / 2, y: cy - sz / 2, w: sz, h: sz,
+        fill: { color: HEX.red }, line: { color: HEX.white, width: 1 } });
+      const last = id === "M6";
+      text(s, `${id} label`, id, { x: last ? cx - 0.53 : cx + 0.13, y: cy - 0.16, w: 0.4, h: 0.32, fontSize: 11, bold: true,
+        color: last ? HEX.white : C.accent1, align: last ? "right" : "left", valign: "middle" });
+    });
+
+    const dates = ["Jan 15", "Feb 28", "Mar 15", "Apr 15", "Apr 20", "end of May"];
+    text(s, "Milestone legend", [
+      { text: "◆ Milestones:  ", options: { bold: true, color: HEX.red } },
+      ...ms.flatMap(([id, , , what], i) => [
+        { text: `${id} `, options: { bold: true } },
+        { text: `${what} (${dates[i]})${i < ms.length - 1 ? "   " : ""}`, options: i === 2 ? { breakLine: true } : {} },
+      ]),
+    ], { x: 0.6, y: yEnd + 0.12, w: 12.15, h: 0.62, fontSize: 12.5, valign: "middle" });
+
+    s.addNotes("~30 s. Until mid-February: finish Chapter 1 experiments and implement Chapter 2. In parallel, from " +
+      "December, ethics approval and integration of the online system. Chapter 2 results by the end of February, an online " +
+      "demo in mid-March, online experiments until mid-April. Papers are written from mid-January, the thesis from " +
+      "mid-March, with the draft to my supervisor on April 20, then revision and the final defense at the end of May.");
+  }
+
   await pres.writeFile({ fileName: OUT });
   if (APPLY_THEME) {
     const { applyTheme } = require(APPLY_THEME);
