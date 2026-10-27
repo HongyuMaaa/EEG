@@ -6,6 +6,7 @@
 const path = require("path");
 const pptxgen = require("pptxgenjs");
 const sharp = require("sharp");
+const ICON = require("./diagram_icons");
 
 const OUT = process.argv[2] || path.join(__dirname, "midterm_defense_sample.pptx");
 const APPLY_THEME = process.argv[3];
@@ -204,7 +205,7 @@ function panel(slide, name, label, x, y, w, h) {
 }
 
 // Right-hand column of numbered key points, closed by a red positioning line.
-function keyPoints(slide, items, positioning, y = 1.75) {
+function keyPoints(slide, items, positioning, y = 1.75, fontSize = 14) {
   const runs = [];
   items.forEach(([h, d]) => {
     runs.push(...rich(h, { bold: true, breakLine: true }));
@@ -214,7 +215,43 @@ function keyPoints(slide, items, positioning, y = 1.75) {
     runs.push({ text: " ", options: { fontSize: 6, breakLine: true } });
   });
   runs.push(...rich(positioning, { color: HEX.red, bold: true }));
-  text(slide, "Key points", runs, { x: 9.6, y, w: 3.4, h: 6.6 - y, fontSize: 14 });
+  text(slide, "Key points", runs, { x: 9.6, y, w: 3.4, h: 6.6 - y, fontSize });
+}
+
+// Place a glyph centred at cx with height h; returns its box.
+function glyph(slide, name, ic, cx, y, h, alt) {
+  const w = h * ic.aspect, x = cx - w / 2;
+  slide.addImage({ objectName: name, data: ic.data, x, y, w, h, altText: alt || name });
+  return { x, y, w, h, r: x + w, b: y + h, cy: y + h / 2 };
+}
+
+// Two-line caption (bold head, smaller sub) centred at cx.
+function caption(slide, name, head, sub, cx, y, w, { fontSize = 12, color = HEX.black, align = "center" } = {}) {
+  const runs = rich(head, { bold: true, fontSize, color });
+  if (sub) {
+    runs[runs.length - 1].options.breakLine = true;
+    runs.push(...rich(sub, { fontSize: fontSize - 1.5, color: HEX.dark }));
+  }
+  text(slide, name, runs, { x: align === "center" ? cx - w / 2 : cx, y, w, h: sub ? 0.42 : 0.25, align, valign: "top" });
+}
+
+// Expected-results slide: illustrative figure with measured baselines, takeaway and provenance note.
+function resultsSlide(chapter, figFile, alt, takeaway, notes) {
+  const s = pres.addSlide({ masterName: "CONTENT", sectionTitle: SECTIONS[1] });
+  s.addText(sectionTitle(1), { placeholder: "title" });
+  text(s, "Lead", [
+    { text: `${chapter} · Expected results  ` },
+    { text: "(illustrative: experiments not yet run)", options: { color: HEX.red, italic: true } },
+  ], { x: 0.6, y: 1.27, w: 12.4, h: 0.4, fontSize: 17, valign: "middle" });
+  s.addImage({ objectName: "Results figure", path: path.join(__dirname, "figures", figFile),
+    x: 0.45, y: 1.75, w: 12.4, h: 4.0, altText: alt });
+  text(s, "Takeaway", rich(takeaway), { x: 0.6, y: 5.85, w: 12.1, h: 0.6, fontSize: 15, valign: "middle" });
+  s.addText("Grey solid bars and filled markers: measured (baselines, seed 0, 28 subjects; mirror r from the data). " +
+    "Red hatched bars, open markers and panels tagged \"Illustrative\": placeholder values showing how results " +
+    "will be reported, to be replaced by experimental results.", {
+    objectName: "Reference", x: 0.35, y: 6.5, w: 11.9, h: 0.85, fontSize: 11, color: C.accent3,
+    valign: "bottom", margin: 0, isTextBox: true });
+  s.addNotes(notes);
 }
 
 // Booktabs-style table cell: rules only where asked.
@@ -492,70 +529,95 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
   {
     const s = pres.addSlide({ masterName: "CONTENT", sectionTitle: SECTIONS[1] });
     s.addText(sectionTitle(1), { placeholder: "title" });
-    text(s, "Lead", rich("Chapter 1 · RED: learn from multi-trial averages during training; a plain EEGNet at inference"),
+    text(s, "Lead", "Chapter 1 · RED: learn from multi-trial averages during training; a plain EEGNet at inference",
       { x: 0.6, y: 1.27, w: 12.4, h: 0.4, fontSize: 17, valign: "middle" });
 
-    const c1 = 0.6, c2 = 2.95, c3 = 5.3, c4 = 7.3, w1 = 2.0, w2 = 2.0, w3 = 1.65, w4 = 1.85;
-    const red = { border: HEX.red };
-    const loss = { border: HEX.red, fill: "FBEDED" };
+    const ic = {
+      group: await ICON.traces("group"), avg: await ICON.traces("average"), single: await ICON.traces("single"),
+      recon: await ICON.traces("recon"), net: await ICON.eegnet(), teacher: await ICON.eegnet({ tint: true }),
+      frozen: await ICON.eegnet({ tint: true, lock: true }), fc: await ICON.fc(), dec: await ICON.decoder(),
+    };
+    const loss = { border: HEX.red, fill: "FBEDED", fontSize: 12.5 };
 
     // Stage 1: teacher on averages
-    panel(s, "Stage 1", "Stage 1 · Averaged-input teacher (training only)", 0.45, 1.75, 8.85, 1.2);
-    const y1 = 2.17, h1 = 0.65;
-    box(s, "Averaging group", "Averaging group", "same subject, session,\ncharacter and bit", c1, y1, w1, h1);
-    box(s, "k-trial average", "k-trial average a", "k ∈ {2, 3, 6}", c2, y1, w2, h1);
-    box(s, "Teacher", "Teacher EEGNet", "trained on averages", c3, y1, w3, h1);
-    box(s, "Frozen teacher", "Frozen teacher T", "reused in Stage 2", c4, y1, w4, h1, red);
-    seg(s, "S1 arrow 1", c1 + w1, y1 + h1 / 2, c2, y1 + h1 / 2);
-    seg(s, "S1 arrow 2", c2 + w2, y1 + h1 / 2, c3, y1 + h1 / 2);
-    seg(s, "S1 arrow 3", c3 + w3, y1 + h1 / 2, c4, y1 + h1 / 2);
+    panel(s, "Stage 1", "Stage 1 · Averaged-input teacher (training only)", 0.45, 1.72, 8.85, 1.42);
+    const y1 = 2.08, h1 = 0.6, cxs1 = [1.45, 3.7, 5.95, 8.2];
+    const g1 = [
+      glyph(s, "Group traces", ic.group, cxs1[0], y1, h1, "Several noisy single trials of one averaging group"),
+      glyph(s, "Average trace", ic.avg, cxs1[1], y1, h1, "Clean average over noisy trials"),
+      glyph(s, "Teacher net", ic.teacher, cxs1[2], y1, h1, "Teacher EEGNet"),
+      glyph(s, "Frozen teacher net", ic.frozen, cxs1[3], y1, h1, "Frozen teacher EEGNet"),
+    ];
+    caption(s, "Group cap", "Averaging group", "same subject, session, char., bit", cxs1[0], 2.7, 2.1);
+    caption(s, "Average cap", "k-trial average a", "k ∈ {2, 3, 6}", cxs1[1], 2.7, 2.0);
+    caption(s, "Teacher cap", "Teacher EEGNet", "trained on averages", cxs1[2], 2.7, 2.0);
+    caption(s, "Frozen cap", "Frozen teacher T", "reused in Stage 2", cxs1[3], 2.7, 2.0, { color: HEX.red });
+    for (let k = 0; k < 3; k++) seg(s, `S1 arrow ${k}`, g1[k].r + 0.08, g1[k].cy, g1[k + 1].x - 0.08, g1[k].cy);
 
     // Stage 2: student on single trials
-    panel(s, "Stage 2", "Stage 2 · Student training on single trials", 0.45, 3.08, 8.85, 2.67);
-    const rA = 3.47, rB = 4.27, rC = 5.05, h = 0.6, m = h / 2;
-    box(s, "Single trial", "Single trial x", "21 channels × 58 samples", c1, rA, w1, h);
-    box(s, "Encoder", "EEGNet encoder", "temporal + spatial filters", c2, rA, w2, h);
-    box(s, "Classifier", "Classifier", "student logits", c3, rA, w3, h);
-    box(s, "L_CE", "L_{CE}", "single-trial label y", c4, rA, w4, h, loss);
-    box(s, "Decoder", "Linear ERP decoder", "training only", c2, rB, w2, h, { dash: "dash" });
-    box(s, "Reconstruction", "Reconstruction x̂", "channels × time", c3, rB, w3, h);
-    box(s, "L_N2N", "L_{N2N} = ‖x̂ − ā‖^{2}", "ā: group average without x", c4, rB, w4, h, loss);
-    box(s, "Frozen teacher 2", "Frozen teacher T", "judges x̂", c3, rC, w3, h, red);
-    box(s, "L_critic", "L_{critic}", "CE(T(x̂), y) + KL", c4, rC, w4, h, loss);
-    seg(s, "S2 x-enc", c1 + w1, rA + m, c2, rA + m);
-    seg(s, "S2 enc-cls", c2 + w2, rA + m, c3, rA + m);
-    seg(s, "S2 cls-ce", c3 + w3, rA + m, c4, rA + m);
-    seg(s, "S2 enc-dec", c2 + w2 / 2, rA + h, c2 + w2 / 2, rB);
-    seg(s, "S2 dec-rec", c2 + w2, rB + m, c3, rB + m);
-    seg(s, "S2 rec-n2n", c3 + w3, rB + m, c4, rB + m);
-    seg(s, "S2 rec-T", c3 + w3 / 2, rB + h, c3 + w3 / 2, rC);
-    seg(s, "S2 T-critic", c3 + w3, rC + m, c4, rC + m);
-    text(s, "Total loss", rich("L = L_{CE} + λ_{1} L_{N2N}\n      + λ_{2} L_{critic}"), {
-      x: c1, y: rB, w: 2.15, h: 0.7, fontSize: 14, bold: true, color: C.accent1, valign: "middle" });
-    text(s, "Total loss note", rich("λ_{1} = 1,  λ_{2} = 0.5"), {
-      x: c1, y: rB + 0.75, w: 2.15, h: 0.3, fontSize: 12, color: C.accent3, valign: "middle" });
+    panel(s, "Stage 2", "Stage 2 · Student training on single trials", 0.45, 3.24, 8.85, 3.33);
+    const cxA = [1.3, 3.55, 5.55], lx = 7.35, lw = 1.8;
+    const yA = 3.62, hA = 0.58;
+    const x = glyph(s, "Single trial", ic.single, cxA[0], yA, hA, "One noisy single trial");
+    const enc = glyph(s, "Student encoder", ic.net, cxA[1], yA, hA, "Student EEGNet encoder");
+    const fc = glyph(s, "Classifier", ic.fc, cxA[2], yA, hA, "Fully connected classifier");
+    caption(s, "Single cap", "Single trial x", "21 ch × 58 samples", cxA[0], 4.22, 1.9);
+    caption(s, "Encoder cap", "EEGNet encoder", "temporal → spatial → separable", cxA[1], 4.22, 2.2);
+    caption(s, "Classifier cap", "Classifier", "student logits", cxA[2], 4.22, 1.5);
+    box(s, "L_CE", "L_{CE}", "label y", lx, yA + 0.04, lw, 0.5, loss);
+    seg(s, "x-enc", x.r + 0.08, x.cy, enc.x - 0.08, x.cy);
+    seg(s, "enc-fc", enc.r + 0.08, enc.cy, fc.x - 0.08, enc.cy);
+    seg(s, "fc-ce", fc.r + 0.08, fc.cy, lx, fc.cy);
 
-    // Inference
-    panel(s, "Inference", null, 0.45, 5.9, 8.85, 0.62);
-    text(s, "Inference text", [
-      { text: "Inference:  ", options: { bold: true } },
-      { text: "single trial x → EEGNet (student) → left→right / right→left.  " },
-      { text: "Decoder and teacher are discarded: same cost as the baseline EEGNet.", options: { italic: true, color: HEX.dark } },
-    ], { x: 0.6, y: 5.9, w: 8.6, h: 0.62, fontSize: 13, valign: "middle" });
+    const yB = 4.8, hB = 0.52;
+    const dec = glyph(s, "Decoder", ic.dec, cxA[1], yB, hB, "Linear ERP decoder (training only)");
+    const rec = glyph(s, "Reconstruction", ic.recon, cxA[2], yB, hB, "Reconstructed ERP");
+    caption(s, "Decoder cap", "Linear ERP decoder", "training only", cxA[1], yB + hB + 0.03, 2.0);
+    caption(s, "Recon cap", "Reconstruction x̂", null, cxA[2], yB + hB + 0.03, 1.8);
+    box(s, "L_N2N", "L_{N2N} = ‖x̂ − ā‖^{2}", "ā: group avg. without x", lx, yB + 0.01, lw, 0.5, loss);
+    seg(s, "enc-dec", enc.x + enc.w / 2, 4.62, dec.x + dec.w / 2, yB - 0.03);
+    seg(s, "dec-rec", dec.r + 0.08, dec.cy, rec.x - 0.08, dec.cy);
+    seg(s, "rec-n2n", rec.r + 0.08, rec.cy, lx, rec.cy);
+
+    const yC = 5.78, hC = 0.5;
+    const tC = glyph(s, "Critic teacher", ic.frozen, cxA[2], yC, hC, "Frozen teacher judging the reconstruction");
+    text(s, "Critic cap", [{ text: "Frozen teacher T", options: { bold: true, color: HEX.red, breakLine: true } },
+      { text: "judges x̂", options: { fontSize: 10.5, color: HEX.dark } }],
+      { x: tC.x - 1.75, y: yC + 0.02, w: 1.65, h: 0.46, fontSize: 12, align: "right", valign: "middle" });
+    box(s, "L_critic", "L_{critic}", "CE(T(x̂), y) + KL", lx, yC, lw, 0.5, loss);
+    seg(s, "rec-T", rec.x + rec.w / 2, yB + hB + 0.27, tC.x + tC.w / 2, yC - 0.02);
+    seg(s, "T-critic", tC.r + 0.08, tC.cy, lx, tC.cy);
+
+    text(s, "Total loss", rich("L = L_{CE} + λ_{1} L_{N2N}\n      + λ_{2} L_{critic}"), {
+      x: 0.6, y: 4.9, w: 2.05, h: 0.62, fontSize: 14, bold: true, color: C.accent1, valign: "middle" });
+    text(s, "Total loss note", rich("λ_{1} = 1,  λ_{2} = 0.5"), {
+      x: 0.6, y: 5.55, w: 2.05, h: 0.3, fontSize: 12, color: C.accent3, valign: "middle" });
 
     keyPoints(s, [
-      ["1. Teacher on averages", "Averaging the same group raises the SNR; the teacher learns what the clean aVEP looks like"],
-      ["2. Noise2Noise reconstruction", "The target ā never contains x, so the student learns E[ERP | x]: only the part a single trial can recover"],
-      ["3. Teacher as critic", "T judges the student's own reconstruction, so the distilled target is always reachable"],
-    ], "Research positioning\nChapter 1 · within-subject single-trial SNR");
+      ["1. Teacher on averages", "Averaging the same group raises the SNR; the teacher learns the clean aVEP"],
+      ["2. Noise2Noise reconstruction", "The target ā never contains x, so the student learns E[ERP | x]: only what one trial can recover"],
+      ["3. Teacher as critic", "T judges the student's own reconstruction, so the target is always reachable"],
+      ["Inference", "Only the student EEGNet is kept: same cost as the baseline"],
+    ], "Research positioning\nChapter 1 · within-subject single-trial SNR", 1.75, 13.5);
 
-    s.addNotes("~65 s. Training only: a teacher EEGNet learns from k-trial averages, which have much higher SNR. " +
-      "The student sees single trials. Besides the label loss, a linear decoder reconstructs the ERP and is trained " +
-      "against the average of the other trials in the same group; because that target never contains x, the best " +
-      "possible output is the expected ERP given x, i.e. only what is recoverable. The frozen teacher then classifies " +
-      "this reconstruction and its verdict is distilled into the student. At test time only the EEGNet remains. " +
-      "Expected: higher within-subject accuracy than the 74.4 % baseline; naive distillation from averages should not help.");
+    s.addNotes("~65 s. Stage 1, training only: a teacher EEGNet learns from k-trial averages, which have much " +
+      "higher SNR, then is frozen. Stage 2: the student sees single trials. Besides the label loss, a linear decoder " +
+      "reconstructs the ERP from the student's features and is trained against the average of the other trials in " +
+      "the same group; because that target never contains x, the best possible output is the expected ERP given x, " +
+      "i.e. only what is recoverable. The frozen teacher classifies this reconstruction and its verdict is distilled " +
+      "into the student. At test time only the EEGNet remains.");
   }
+
+  // ===== 8b. Chapter 1: expected results =====
+  resultsSlide("Chapter 1 · RED", "red_results.png",
+    "Expected within-subject accuracy, ablation and per-subject gain of RED (illustrative), and a measured linear N2N reconstruction",
+    "Expected: RED > EEGNet within subjects, both losses contribute, weak subjects gain most.  " +
+    "Measured already: a linear N2N estimate recovers R^{2} = 0.31 of the held-out group ERP (raw single trial: −2.0).",
+    "~30 s. How Chapter 1 will be evaluated. (a) Within-subject accuracy against the measured baselines; the red " +
+    "bars are placeholders. (b) Ablation: each loss term on its own, the full method, and naive distillation, which " +
+    "we expect not to help. (c) Gain per subject. (d) is real: a simple linear Noise2Noise estimator, trained to " +
+    "predict the average of the other trials in the group, already recovers about 30 % of that held-out ERP from one " +
+    "trial, while the raw trial is a worse predictor than zero. This is the recoverable part RED is built to learn.");
 
   // ===== 9. Chapter 2: LR-MoE =====
   {
@@ -563,66 +625,90 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
     s.addText(sectionTitle(1), { placeholder: "title" });
     text(s, "Lead", "Chapter 2 · LR-MoE: experts organized by hemispheric symmetry and latency, chosen by a physiological router",
       { x: 0.6, y: 1.27, w: 12.4, h: 0.4, fontSize: 17, valign: "middle" });
+    panel(s, "Diagram panel", null, 0.45, 1.72, 8.85, 4.85);
 
-    panel(s, "Diagram panel", null, 0.45, 1.75, 8.85, 4.77);
+    const ic = {
+      head: await ICON.head(), anti: await ICON.hemiTraces("anti"), sym: await ICON.hemiTraces("sym"),
+      bank: await ICON.filterBank(), exp: await ICON.expert(), expR: await ICON.expert(true),
+      mlp: await ICON.mlp(), gate: await ICON.gate(), desc: await ICON.descriptors(),
+    };
 
-    // Input and hemispheric decomposition
-    const xIn = { x: 0.6, y: 3.0, w: 1.25, h: 0.8 };
-    box(s, "Input", "Single\ntrial x", null, xIn.x, xIn.y, xIn.w, xIn.h);
-    const dx = 2.15, dw = 2.05, ya = 2.2, ys = 3.75, dh = 0.85;
-    text(s, "Decomposition head", "Hemispheric decomposition", { x: dx - 0.2, y: 1.8, w: dw + 0.4, h: 0.32,
-      fontSize: 13, bold: true, align: "center", valign: "middle" });
-    box(s, "x_a", "x_{a} = (x − Mx) / 2", "antisymmetric: lateralized", dx, ya, dw, dh);
-    box(s, "x_s", "x_{s} = (x + Mx) / 2", "symmetric: shared + context", dx, ys, dw, dh);
-    text(s, "Mirror note", "M: mirror P7↔P8, PO7↔PO8, O1↔O2, …", { x: dx - 0.45, y: ys + dh + 0.05, w: dw + 0.9,
-      h: 0.3, fontSize: 11, italic: true, align: "center", color: C.accent5 });
-    const fx = 1.98;
-    seg(s, "Fork in h", xIn.x + xIn.w, xIn.y + xIn.h / 2, fx, xIn.y + xIn.h / 2, { arrow: false });
-    seg(s, "Fork in v", fx, ya + dh / 2, fx, ys + dh / 2, { arrow: false });
-    seg(s, "Fork to x_a", fx, ya + dh / 2, dx, ya + dh / 2);
-    seg(s, "Fork to x_s", fx, ys + dh / 2, dx, ys + dh / 2);
+    // Input
+    const head = glyph(s, "Head", ic.head, 1.2, 2.45, 1.25, "Head with left (red) and right (blue) posterior electrodes and the mirror operator");
+    caption(s, "Head cap", "Single trial x", "21 posterior channels", 1.2, 3.75, 1.6);
 
-    // Shared trunk
-    const tx = 4.55, tw = 0.95;
-    box(s, "Trunk", "Shared\ntemporal\nconv", null, tx, ya, tw, ys + dh - ya);
-    seg(s, "x_a to trunk", dx + dw, ya + dh / 2, tx, ya + dh / 2);
-    seg(s, "x_s to trunk", dx + dw, ys + dh / 2, tx, ys + dh / 2);
+    // Hemispheric decomposition
+    text(s, "Decomp head", "Hemispheric decomposition", { x: 2.25, y: 1.8, w: 2.3, h: 0.3, fontSize: 12.5, bold: true,
+      align: "center", valign: "middle" });
+    const xa = glyph(s, "x_a traces", ic.anti, 3.4, 2.2, 0.55, "Antisymmetric stream: left and right hemisphere opposite");
+    const xs = glyph(s, "x_s traces", ic.sym, 3.4, 3.48, 0.55, "Symmetric stream: left and right hemisphere equal");
+    caption(s, "x_a cap", "x_{a} = (x − Mx) / 2", "lateralized", 3.4, 2.77, 2.0);
+    caption(s, "x_s cap", "x_{s} = (x + Mx) / 2", "shared + context", 3.4, 4.05, 2.0);
+    text(s, "Hemi legend", [{ text: "red", options: { color: HEX.red, bold: true } }, { text: " left / " },
+      { text: "blue", options: { color: "1F4E79", bold: true } }, { text: " right hemisphere" }],
+      { x: 2.4, y: 4.5, w: 2.0, h: 0.3, fontSize: 10, italic: true, align: "center", color: C.accent5 });
+    const fx = 2.15;
+    seg(s, "Fork h", head.r + 0.02, head.cy, fx, head.cy, { arrow: false });
+    seg(s, "Fork v", fx, xa.cy, fx, xs.cy, { arrow: false });
+    seg(s, "Fork a", fx, xa.cy, xa.x - 0.05, xa.cy);
+    seg(s, "Fork s", fx, xs.cy, xs.x - 0.05, xs.cy);
+
+    // Shared temporal convolution
+    const bank = glyph(s, "Filter bank", ic.bank, 5.05, 2.15, 2.3, "Shared temporal convolution filter bank");
+    caption(s, "Bank cap", "Shared\ntemporal conv", null, 5.05, 4.5, 1.2);
+    seg(s, "a-bank", xa.r + 0.05, xa.cy, bank.x - 0.03, xa.cy);
+    seg(s, "s-bank", xs.r + 0.05, xs.cy, bank.x - 0.03, xs.cy);
 
     // Experts
-    const ex = 5.85, ew = 2.4, eh = 0.75, eys = [2.2, 3.05, 3.9];
-    text(s, "Experts head", "Expert families", { x: ex, y: 1.8, w: ew, h: 0.32, fontSize: 13, bold: true,
-      align: "center", valign: "middle" });
-    box(s, "Expert 1", "Mirror-equivariant (x_{a})", "logit(Mx) = −logit(x)", ex, eys[0], ew, eh);
-    box(s, "Expert 2", "Hemisphere-dominant", "L- or R-weighted, swapped by M", ex, eys[1], ew, eh);
-    box(s, "Expert 3", "Symmetric / context (x_{s})", "shared response and overlap", ex, eys[2], ew, eh);
-    text(s, "Latency note", "each × 3 latency variants (≈ 100 / 170 / 230 ms)", { x: ex - 0.45, y: eys[2] + eh + 0.05,
-      w: ew + 0.9, h: 0.3, fontSize: 11, italic: true, align: "center", color: C.accent5 });
-    const fx2 = 5.68, mid = eys.map((y) => y + eh / 2);
-    seg(s, "Trunk out", tx + tw, mid[1], fx2, mid[1], { arrow: false });
-    seg(s, "Expert fork", fx2, mid[0], fx2, mid[2], { arrow: false });
-    mid.forEach((y, i) => seg(s, `To expert ${i + 1}`, fx2, y, ex, y));
+    text(s, "Experts head", "Expert families (× 3 latencies)", { x: 5.85, y: 1.8, w: 2.6, h: 0.3, fontSize: 12.5,
+      bold: true, align: "center", valign: "middle" });
+    const ex = 5.85, ew = 2.6, eh = 0.72, eys = [2.2, 3.03, 3.86];
+    const experts = [["Mirror-equivariant", "logit(Mx) = −logit(x)", true],
+      ["Hemisphere-dominant", "L- or R-weighted", false], ["Symmetric / context", "shared response (x_{s})", false]];
+    experts.forEach(([h, d, tint], k) => {
+      s.addShape(pres.shapes.RECTANGLE, { objectName: `Expert ${k + 1} frame`, x: ex, y: eys[k], w: ew, h: eh,
+        fill: { color: HEX.white }, line: { color: HEX.black, width: 1 } });
+      glyph(s, `Expert ${k + 1} net`, tint ? ic.expR : ic.exp, ex + 0.45, eys[k] + 0.14, 0.44, `Expert ${k + 1} network`);
+      caption(s, `Expert ${k + 1} cap`, h, d, ex + 0.88, eys[k] + 0.13, ew - 0.92, { fontSize: 11.5, align: "left" });
+    });
+    text(s, "Latency note", "latency variants: ≈ 100 / 170 / 230 ms", { x: ex - 0.1, y: 4.62, w: ew + 0.2, h: 0.28,
+      fontSize: 10, italic: true, align: "center", color: C.accent5 });
+    const mids = eys.map((y) => y + eh / 2), fx2 = 5.78;
+    seg(s, "Bank out", bank.r + 0.03, mids[1], fx2, mids[1], { arrow: false });
+    seg(s, "Expert fork", fx2, mids[0], fx2, mids[2], { arrow: false });
+    mids.forEach((y, k) => seg(s, `To expert ${k + 1}`, fx2, y, ex - 0.02, y));
 
-    // Weighted sum and output
-    const sx = 8.62, sd = 0.5, sy = mid[1] - sd / 2, jx = 8.42;
-    mid.forEach((y, i) => seg(s, `From expert ${i + 1}`, ex + ew, y, jx, y, { arrow: false }));
-    seg(s, "Expert join", jx, mid[0], jx, mid[2], { arrow: false });
-    seg(s, "Join to sum", jx, mid[1], sx, mid[1]);
+    // Gating sum and output
+    const jx = 8.55, sd = 0.46, sx = 8.68, sy = mids[1] - sd / 2;
+    mids.forEach((y, k) => seg(s, `From expert ${k + 1}`, ex + ew, y, jx, y, { arrow: false }));
+    seg(s, "Expert join", jx, mids[0], jx, mids[2], { arrow: false });
+    seg(s, "Join to sum", jx, mids[1], sx, mids[1]);
     s.addText("Σ", { objectName: "Weighted sum", shape: pres.shapes.OVAL, x: sx, y: sy, w: sd, h: sd,
-      fill: { color: HEX.white }, line: { color: HEX.black, width: 1 }, fontSize: 18, bold: true,
+      fill: { color: HEX.white }, line: { color: HEX.black, width: 1.2 }, fontSize: 17, bold: true,
       align: "center", valign: "middle", margin: 0 });
-    seg(s, "Sum to output", sx + sd / 2, sy, sx + sd / 2, 2.55);
-    text(s, "Output", rich("p(y | x)"), { x: sx - 0.3, y: 2.17, w: sd + 0.6, h: 0.36, fontSize: 14, bold: true,
+    seg(s, "Sum to output", sx + sd / 2, sy, sx + sd / 2, 2.32);
+    text(s, "Output", rich("p(y | x)"), { x: sx - 0.35, y: 1.95, w: sd + 0.7, h: 0.35, fontSize: 13, bold: true,
       align: "center", valign: "middle" });
 
     // Router
-    const ry = 5.32, rh = 0.95, rx = 0.6, rw = 7.6;
-    box(s, "Router", "Physiological router: small MLP → soft top-2 expert weights g",
-      "lateralization index · left/right power ratio · ~10 Hz amplitude & phase (O1, Oz, O2) · antisym./sym. energy ratio",
-      rx, ry, rw, rh, { border: HEX.red, dash: "dash", headColor: HEX.red });
-    seg(s, "Input to router", xIn.x + xIn.w / 2, xIn.y + xIn.h, xIn.x + xIn.w / 2, ry, { color: HEX.red });
-    seg(s, "Router out h", rx + rw, ry + rh / 2, sx + sd / 2, ry + rh / 2, { arrow: false, color: HEX.red });
-    seg(s, "Router to sum", sx + sd / 2, ry + rh / 2, sx + sd / 2, sy + sd, { color: HEX.red });
-    text(s, "Gate label", "g", { x: sx + sd / 2 + 0.06, y: 4.3, w: 0.3, h: 0.35, fontSize: 15, bold: true,
+    const ry = 5.0, rh = 1.42, rx = 0.6, rw = 7.8;
+    s.addShape(pres.shapes.RECTANGLE, { objectName: "Router frame", x: rx, y: ry, w: rw, h: rh,
+      fill: { color: HEX.white }, line: { color: HEX.red, width: 1.2, dashType: "dash" } });
+    text(s, "Router head", "Physiological router", { x: rx + 0.12, y: ry + 0.05, w: 3, h: 0.3, fontSize: 12.5,
+      bold: true, color: C.accent1, valign: "middle" });
+    const desc = glyph(s, "Descriptors", ic.desc, 1.15, ry + 0.45, 0.62, "Descriptor values");
+    text(s, "Descriptor list", "Lateralization index · L/R power ratio\n~10 Hz amplitude & phase · antisym./sym. energy",
+      { x: 1.65, y: ry + 0.38, w: 3.1, h: 0.95, fontSize: 11, valign: "middle" });
+    const mlp = glyph(s, "Router MLP", ic.mlp, 5.65, ry + 0.36, 0.72, "Small MLP");
+    caption(s, "MLP cap", "Small MLP", null, 5.65, ry + 1.1, 1.4);
+    const gate = glyph(s, "Gate weights", ic.gate, 7.35, ry + 0.38, 0.66, "Soft top-2 gate weights");
+    caption(s, "Gate cap", "Soft top-2 weights g", null, 7.35, ry + 1.1, 1.9);
+    seg(s, "Desc to MLP", 4.78, mlp.cy, mlp.x - 0.05, mlp.cy, { color: HEX.red });
+    seg(s, "MLP to gate", mlp.r + 0.05, mlp.cy, gate.x - 0.05, mlp.cy, { color: HEX.red });
+    seg(s, "Input to router", head.x + head.w / 2, 4.2, head.x + head.w / 2, ry, { color: HEX.red });
+    seg(s, "Gate out", gate.r + 0.05, gate.cy, sx + sd / 2, gate.cy, { arrow: false, color: HEX.red });
+    seg(s, "Gate to sum", sx + sd / 2, gate.cy, sx + sd / 2, sy + sd + 0.02, { color: HEX.red });
+    text(s, "Gate label", "g", { x: sx + sd / 2 + 0.06, y: 4.35, w: 0.3, h: 0.35, fontSize: 15, bold: true,
       italic: true, color: C.accent1, valign: "middle" });
 
     keyPoints(s, [
@@ -630,17 +716,26 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
       ["2. Structured experts", "Symmetry type × response latency, matching the observed subject differences"],
       ["3. Physiological router", "Interpretable descriptors pick experts per trial; no target labels needed"],
       ["Training losses", "CE + load balancing + mirror consistency + subject-coherent routing"],
-    ], "Research positioning\nChapter 2 · cross-subject (LOSO) decoding");
+    ], "Research positioning\nChapter 2 · cross-subject (LOSO) decoding", 1.75, 13.5);
 
     s.addNotes("~65 s. Subjects differ in how symmetric and how fast their response is, so one model does not fit all. " +
-      "The trial is split by the mirror operator into an antisymmetric, lateralized part and a symmetric part. " +
-      "After a shared temporal convolution, three expert families process them: mirror-equivariant experts for " +
-      "strong lateralizers, hemisphere-dominant experts for asymmetric responders, and symmetric experts for the " +
-      "shared response; each has early, middle and late latency variants. A small router reads interpretable " +
-      "descriptors of the trial and weights the experts. Test: leave-one-subject-out without target data. " +
-      "Expected: above the 62.3 % EEGNet LOSO baseline, with router choices that agree with each subject's " +
-      "measured symmetry and latency.");
+      "The mirror operator splits each trial into an antisymmetric, lateralized stream and a symmetric, shared stream. " +
+      "After a shared temporal convolution, three expert families process them: mirror-equivariant experts for strong " +
+      "lateralizers, hemisphere-dominant experts for asymmetric responders, and symmetric experts for the shared " +
+      "response, each with early, middle and late latency variants. A small router reads interpretable descriptors " +
+      "of the trial and gives soft top-2 weights to the experts. Test: leave-one-subject-out without target data.");
   }
+
+  // ===== 9b. Chapter 2: expected results =====
+  resultsSlide("Chapter 2 · LR-MoE", "moe_results.png",
+    "Expected LOSO accuracy, few-shot calibration, routing weights and per-subject accuracy of LR-MoE (illustrative)",
+    "Expected: higher accuracy on unseen subjects, faster calibration, and routing that follows each subject's " +
+    "measured mirror symmetry; the largest gains for atypical subjects (low r).",
+    "~30 s. How Chapter 2 will be evaluated. (a) Leave-one-subject-out accuracy against the measured baselines and " +
+    "a generic mixture of experts. (b) With a few labelled trials, tuning only the router should approach the " +
+    "within-subject level faster than fine-tuning EEGNet. (c) Routing weights per subject, sorted by the measured " +
+    "mirror correlation: strong lateralizers should use the mirror-equivariant experts. (d) Per-subject accuracy; " +
+    "points above the diagonal are improvements. All LR-MoE values here are placeholders.");
 
   await pres.writeFile({ fileName: OUT });
   if (APPLY_THEME) {
