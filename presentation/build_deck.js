@@ -745,44 +745,50 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
   {
     const s = pres.addSlide({ masterName: "CONTENT", sectionTitle: SECTIONS[2] });
     s.addText(sectionTitle(2), { placeholder: "title" });
-    text(s, "Lead", "Chapters 1–2: from algorithm design to validated, complete methods",
+    text(s, "Lead", "Chapters 1–2: four research tasks to complete and validate the two algorithms",
       { x: 0.6, y: 1.27, w: 12.4, h: 0.4, fontSize: 17, valign: "middle" });
 
-    const H = { bottom: 1, bold: true, fontSize: 15, top: 1.5 };
-    const c = (t, o = {}) => cell(t, { fontSize: 13, ...o });
-    const rows = [
-      ["Comparative experiments",
-        "EEGNet, DCPM + xDAWN-LDA, ShallowConvNet, EEG-Conformer; within-subject and pooled",
-        "EEGNet, DCPM + Euclidean alignment, domain-adversarial training, generic MoE; leave-one-subject-out"],
-      ["Ablation studies",
-        "Each loss term; k ∈ {2, 3, 6}; context-matched vs. class-mean target; naive distillation",
-        "No decomposition; single expert family; no latency variants; learned vs. physiological router"],
-      ["Generalization",
-        "All three protocols; several random seeds; Wilcoxon signed-rank tests with FDR correction",
-        "28 unseen subjects; unlabelled router adaptation; few-shot calibration curves"],
-      ["Robustness",
-        "Fewer training trials (learning curves); channel dropout; session-to-session shift",
-        "Atypical subjects (low mirror r); reduced channel sets; short calibration"],
-      ["Optimization",
-        "Non-linear decoder; teacher ensembles; training cost",
-        "Lightweight experts for real-time use; checking router choices against measured r and latency"],
+    const tasks = [
+      ["Joint ablation of RED and LR-MoE",
+        "Quantify each algorithm's contribution, their interaction and complementarity",
+        "2 × 2 design (with / without RED training × with / without LR-MoE) on within-subject, pooled and LOSO protocols"],
+      ["Generalization on public ERP datasets",
+        "Show the methods are not tied to one dataset, paradigm or recording setup",
+        "Public ERP / P300 datasets (e.g. MOABB, BCI Competition III) with other devices; adapt the mirror split where needed"],
+      ["Unified, rigorous benchmark",
+        "Fair comparison with state-of-the-art ERP decoders and cross-subject methods",
+        "Identical leakage-free splits; several seeds; Wilcoxon signed-rank tests with FDR correction, effect sizes; open-source code"],
+      ["Neurophysiological interpretability",
+        "Confirm that the gains come from aVEP physiology, not from artifacts",
+        "Spatial patterns of learned filters; RED reconstructions vs. averaged ERPs; LR-MoE routing vs. each subject's mirror r and latency"],
     ];
-    const body = rows.map(([a, b, d], i) => {
-      const last = i === rows.length - 1 ? { bottom: 1.5 } : {};
-      return [c(a, { bold: true, ...last }), c(b, last), c(d, last)];
+    const cw = 5.95, ch = 2.02, xs = [0.6, 6.75], ys = [1.82, 3.98];
+    tasks.forEach(([title, goal, how], k) => {
+      const x = xs[k % 2], y = ys[Math.floor(k / 2)];
+      s.addShape(pres.shapes.RECTANGLE, { objectName: `Task ${k + 1} card`, x, y, w: cw, h: ch,
+        fill: { color: HEX.light }, line: { type: "none" } });
+      s.addText(String(k + 1), { objectName: `Task ${k + 1} number`, shape: pres.shapes.OVAL, x: x + 0.2, y: y + 0.18,
+        w: 0.48, h: 0.48, fill: { color: HEX.red }, color: C.background1, fontSize: 18, bold: true,
+        align: "center", valign: "middle", margin: 0 });
+      text(s, `Task ${k + 1} title`, title, { x: x + 0.82, y: y + 0.18, w: cw - 1.0, h: 0.48, fontSize: 17, bold: true,
+        valign: "middle" });
+      text(s, `Task ${k + 1} body`, [
+        { text: "Goal: ", options: { bold: true, color: HEX.red } },
+        { text: goal, options: { breakLine: true } },
+        { text: "Method: ", options: { bold: true, color: HEX.red } },
+        { text: how },
+      ], { x: x + 0.25, y: y + 0.78, w: cw - 0.45, h: ch - 0.88, fontSize: 13.5, paraSpaceAfter: 5 });
     });
-    s.addTable([[cell("", H), cell("Chapter 1 · RED (within-subject SNR)", H),
-      cell("Chapter 2 · LR-MoE (cross-subject)", H)], ...body], {
-      objectName: "Plan table", x: 0.6, y: 1.8, w: 12.1, colW: [2.3, 4.9, 4.9],
-      rowH: [0.45, 0.74, 0.74, 0.74, 0.74, 0.74], fontFace: THEME.bodyFontFace, margin: [3, 8, 3, 8] });
 
-    text(s, "Outcome", "Goal: each chapter validated on 28 subjects with statistical tests, ready for one paper per chapter",
-      { x: 0.6, y: 6.05, w: 12.1, h: 0.45, fontSize: 17, bold: true, color: C.accent1, align: "center", valign: "middle" });
+    text(s, "Outcome", "Outcome: one validated, interpretable decoder (RED + LR-MoE) for the online system of Chapter 3",
+      { x: 0.6, y: 6.1, w: 12.1, h: 0.42, fontSize: 16, bold: true, color: C.accent1, align: "center", valign: "middle" });
 
-    s.addNotes("~35 s. Both methods still need full validation. Comparisons add standard ERP decoders and recent deep " +
-      "models for Chapter 1, and alignment and domain-adaptation methods for Chapter 2. Ablations remove one component " +
-      "at a time. All results are reported over 28 subjects and several seeds with signed-rank tests. Robustness " +
-      "covers less training data, fewer channels and atypical subjects. Optimization prepares the models for real-time use.");
+    s.addNotes("~40 s. Four tasks remain for the two algorithms. First, a joint ablation: RED and LR-MoE address " +
+      "different problems, so a two-by-two design shows what each contributes and whether they add up when combined. " +
+      "Second, generalization: public ERP datasets with other devices and paradigms show the methods are not specific " +
+      "to this dataset. Third, a unified benchmark: the same leakage-free splits for every method, several seeds and " +
+      "proper statistics. Fourth, interpretability: the learned filters, reconstructions and routing should match " +
+      "aVEP physiology. Together they deliver one validated decoder for the online system.");
   }
 
   // ===== 14. Next-stage plan: online robotic arm =====
@@ -879,13 +885,11 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
     seg(s, "Header rule", 0.6, y0 - 0.06, gx + gw, y0 - 0.06, { arrow: false, width: 1.5 });
 
     const groups = [
-      ["Chapter 1\nRED", HEX.red, [
-        ["Full comparisons on all protocols", [0, 1], [1, 15]],
-        ["Ablation, robustness, statistics", [1, 1], [2, 15]],
-      ]],
-      ["Chapter 2\nLR-MoE", "C55A5A", [
-        ["Implementation and LOSO experiments", [0, 15], [2, 31]],
-        ["Ablation, few-shot, routing analysis", [2, 1], [3, 28]],
+      ["Chapters 1–2\nAlgorithms", HEX.red, [
+        ["LR-MoE implementation, benchmark", [0, 1], [1, 31]],
+        ["Joint ablation (RED × LR-MoE)", [1, 15], [2, 30]],
+        ["Public ERP dataset validation", [2, 1], [3, 28]],
+        ["Interpretability analysis", [3, 1], [3, 28]],
       ]],
       ["Chapter 3\nOnline system", "404040", [
         ["Ethics approval, subject recruitment", [1, 1], [2, 31]],
@@ -922,8 +926,8 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
 
     // Milestones: diamond at the date, on the row of the task it closes
     const ms = [
-      ["M1", 1, [2, 15], "Chapter 1 results complete"],
-      ["M2", 3, [3, 28], "Chapter 2 results complete"],
+      ["M1", 1, [2, 30], "joint ablation complete"],
+      ["M2", 3, [3, 28], "Chapters 1–2 results complete"],
       ["M3", 6, [4, 15], "online system demo"],
       ["M4", 7, [5, 15], "online experiments complete"],
       ["M5", 9, [5, 20], "thesis draft to supervisor"],
@@ -938,7 +942,7 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
         color: last ? HEX.white : C.accent1, align: last ? "right" : "left", valign: "middle" });
     });
 
-    const dates = ["Jan 15", "Feb 28", "Mar 15", "Apr 15", "Apr 20", "end of May"];
+    const dates = ["Jan 31", "Feb 28", "Mar 15", "Apr 15", "Apr 20", "end of May"];
     text(s, "Milestone legend", [
       { text: "◆ Milestones:  ", options: { bold: true, color: HEX.red } },
       ...ms.flatMap(([id, , , what], i) => [
@@ -947,8 +951,8 @@ function cell(textVal, { top = 0, bottom = 0, bold = false, color = HEX.black, a
       ]),
     ], { x: 0.6, y: yEnd + 0.12, w: 12.15, h: 0.62, fontSize: 12.5, valign: "middle" });
 
-    s.addNotes("~30 s. Until mid-February: finish Chapter 1 experiments and implement Chapter 2. In parallel, from " +
-      "December, ethics approval and integration of the online system. Chapter 2 results by the end of February, an online " +
+    s.addNotes("~30 s. Until January: implement LR-MoE and run the unified benchmark; joint ablation by the end of January; public-dataset validation and interpretability in February. In parallel, from " +
+      "December, ethics approval and integration of the online system. Algorithm results by the end of February, an online " +
       "demo in mid-March, online experiments until mid-April. Papers are written from mid-January, the thesis from " +
       "mid-March, with the draft to my supervisor on April 20, then revision and the final defense at the end of May.");
   }
