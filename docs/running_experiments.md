@@ -82,7 +82,7 @@ This must print `True` and `NVIDIA GeForce RTX 3060`.
 
 ```bash
 python scripts/preprocess.py          # ~1 min -> derivatives/preprocessed/
-python -m pytest -q tests             # ~5 s; expect "10 passed"
+python -m pytest -q tests             # ~5 s; expect "11 passed"
 ```
 
 `python scripts/verify_preprocessing.py` (about 6 minutes) is optional. It regenerates
@@ -218,6 +218,77 @@ The comparison lists, for each method:
 - the Wilcoxon p-value;
 - the teacher's accuracy on single trials and averages;
 - how well single trials reconstruct their group ERP (R²).
+
+## 3c. Chapter 1 round 2: controls and tuning
+
+Background: `reports/chapter1_round1_analysis.md`. Details of the variants and the selection
+rule: `docs/chapter1_red.md` §5.
+
+Durations are estimated from the measured round-1 times on your RTX 3060:
+
+| Run | Measured round-1 time |
+|---|---|
+| EEGNet, 168 folds | 1.4 h |
+| RED, 168 folds | 4.0 h |
+| Fold teachers | 1.3 h |
+
+The GPU is far from saturated by one run, so two terminals working in parallel are fine.
+
+```bash
+git pull
+python -m pytest -q tests        # expect "11 passed"
+```
+
+### Phase A — controls (seed 0 first; ≈ 12 h)
+
+```bash
+python scripts/run_all_baselines.py --device cuda --protocols within --methods red_selfteacher red_randteacher eegnet_avgaug
+```
+
+**Push these results as soon as they finish** (section 4). They decide how Chapter 1 is framed.
+
+### Phase A — extra seeds (≈ 13 h; can run in a second terminal)
+
+```bash
+python scripts/run_all_baselines.py --device cuda --protocols within --methods eegnet red --seeds 1 2
+```
+
+### Phase B — tuning (selection by validation accuracy only; ≈ 15 h)
+
+Run the three sweeps in this order. Each one starts from the previous winner:
+
+```bash
+python scripts/run_sweep.py --name weights --method red --device cuda --workers 2 --grid "loss.lambda_critic=[0.5, 1, 2]" "loss.lambda_n2n=[0.3, 1, 3]"
+python scripts/run_sweep.py --name tau     --method red --device cuda --workers 2 --base-from weights --grid "loss.tau=[1, 2, 4]"
+python scripts/run_sweep.py --name teacher --method red --device cuda --workers 2 --base-from tau --grid "teacher.k_set=[[2, 3, 6], [1, 2, 3, 4, 5, 6]]" "loss.beta_lateral=[1, 5]"
+python scripts/select_config.py --method red --sweep weights --out results/sweep_weights.md
+python scripts/select_config.py --method red --sweep tau     --out results/sweep_tau.md
+python scripts/select_config.py --method red --sweep teacher --out results/sweep_teacher.md
+```
+
+- **Workers:** `--workers 2` trains two configurations at a time. Use `--workers 3` if the GPU
+  has headroom (check with `nvidia-smi`).
+- **What a sweep runs:** 56 folds per configuration (test sessions 1 and 4). Results go to
+  `results/red@sw-<sweep>-<values>/` and are committed like any other results.
+
+### Phase B — final run of the selected configuration (3 seeds, ≈ 16 h)
+
+```bash
+python scripts/run_baseline.py --method red --protocol within --device cuda --set-from-sweep teacher --tag tuned --seed 0
+python scripts/run_baseline.py --method red --protocol within --device cuda --set-from-sweep teacher --tag tuned --seed 1
+python scripts/run_baseline.py --method red --protocol within --device cuda --set-from-sweep teacher --tag tuned --seed 2
+```
+
+### Comparison tables (before committing)
+
+```bash
+python scripts/compare_methods.py --protocol within --out results/compare_within.md
+python scripts/compare_methods.py --protocol within --exclude-sessions 2 5 --out results/compare_within_clean.md
+```
+
+- The first table covers all folds; the second only the folds whose test session never served
+  for selection.
+- Methods with several seeds are averaged per subject (column `seeds`).
 
 ## 4. Check, commit and push the results
 

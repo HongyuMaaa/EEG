@@ -80,6 +80,9 @@ position.
 | `red_critic` | ✓ | | ✓ | | | Effect of the critic alone |
 | **`red`** | ✓ | ✓ | ✓ | | group LOO average | **Full method** |
 | `red_classmean` | ✓ | ✓ | ✓ | | subject class mean | Does matching the overlap context matter? |
+| `red_selfteacher` | ✓ | ✓ | ✓ | | group LOO average | **Control:** teacher trained on *single trials* (k = 1). Is averaging knowledge the cause of the gain? |
+| `red_randteacher` | ✓ | ✓ | ✓ | | group LOO average | **Control:** randomly initialised frozen teacher. What does an arbitrary fixed head contribute? |
+| `eegnet_avgaug` | ✓ | | | | | **Baseline:** EEGNet on single trials plus random k-trial averages (k ∈ {2, 3, 6}), about 50/50, cross-entropy only |
 
 ### Diagnostics saved per fold
 
@@ -95,3 +98,46 @@ position.
 - **Secondary:** `pooled` (one model on all subjects, 6 folds).
 - Groups, teacher averages and targets always come from the training sessions only.
   Validation and early stopping use single trials, except for the teacher.
+
+## 5. Round 2: controls and hyperparameter selection
+
+Motivation and round-1 results: `reports/chapter1_round1_analysis.md`.
+
+### Configuration overrides
+
+Any configuration value can be changed per run without editing `configs/red.yaml`:
+
+```bash
+python scripts/run_baseline.py --method red --protocol within --tag lc1 --set loss.lambda_critic=1
+```
+
+- Results go to `results/red@lc1/`. The overrides are stored in `run_info.json`.
+- Unknown keys are rejected, so a typo cannot silently run the default configuration.
+- The teacher cache key covers the model, training and teacher settings. Runs that change only
+  loss weights therefore reuse the same fold teachers.
+
+### Sweeps and selection rule
+
+`scripts/run_sweep.py` runs every combination of a grid on a fold subset: within protocol, all
+28 subjects, test sessions 1 and 4, so validation sessions 2 and 5 (56 folds).
+
+`scripts/select_config.py` ranks configurations by **mean validation accuracy**. Test accuracy
+is displayed but never used for selection.
+
+| Sweep | Grid | Starts from |
+|---|---|---|
+| `weights` | λ_critic ∈ {0.5, 1, 2} × λ_n2n ∈ {0.3, 1, 3} | Defaults |
+| `tau` | τ ∈ {1, 2, 4} | Winner of `weights` (`--base-from weights`) |
+| `teacher` | teacher k ∈ {{2, 3, 6}, {1, …, 6}} × β_lateral ∈ {1, 5} | Winner of `tau` |
+
+The selected configuration is then run on all 168 folds with 3 seeds:
+`--set-from-sweep teacher --tag tuned`.
+
+### Leakage control
+
+Validation sessions 2 and 5 were used for selection, and they are test sessions of other folds.
+The final comparison is therefore reported twice:
+
+- on all folds;
+- on the clean folds whose test session never served for selection:
+  `compare_methods.py --exclude-sessions 2 5` (112 folds).

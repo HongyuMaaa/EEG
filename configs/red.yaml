@@ -22,10 +22,18 @@ training:
   pooled:  {dropout: 0.25, batch_size: 256, lr: 0.001, max_epochs: 500, patience: 30}
   loso:    {dropout: 0.25, batch_size: 256, lr: 0.001, max_epochs: 150, patience: 20}
 
-# Method name -> which loss terms are on. All variants share the cached teacher of each fold.
+# Method name -> which loss terms are on. Variants share the cached teacher of each fold unless they
+# override teacher settings (``teacher`` key), which gives them their own cache entry.
 variants:
   red:            {n2n: true,  critic: true,  kd_naive: false, target: group_loo}   # full method
   red_n2n:        {n2n: true,  critic: false, kd_naive: false, target: group_loo}   # reconstruction only
   red_critic:     {n2n: false, critic: true,  kd_naive: false, target: group_loo}   # critic only
   red_classmean:  {n2n: true,  critic: true,  kd_naive: false, target: class_mean}  # context-marginalised target
   kd_naive:       {n2n: false, critic: false, kd_naive: true,  target: group_loo}   # classic distillation from averages
+  # --- controls (round 2, see reports/chapter1_round1_analysis.md) ---
+  red_selfteacher: {n2n: true, critic: true, kd_naive: false, target: group_loo,
+                    teacher: {k_set: [1], val_k: 1}}               # teacher trained on single trials only
+  red_randteacher: {n2n: true, critic: true, kd_naive: false, target: group_loo,
+                    teacher: {train: false}}                       # randomly initialised frozen teacher
+  eegnet_avgaug:   {n2n: false, critic: false, kd_naive: false, target: group_loo,
+                    avg_aug: true, avg_aug_k: [2, 3, 6], avg_aug_draws: 6}   # EEGNet on singles + random averages

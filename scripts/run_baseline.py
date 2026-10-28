@@ -26,6 +26,7 @@ import argparse
 import hashlib
 import json
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -56,6 +57,27 @@ def git_commit() -> str:
         return "unknown"
 
 
+NEW_KEYS_ALLOWED = {"teacher.train"}      # optional keys that are absent from the default config
+
+
+def apply_overrides(cfg: dict, items: list[str]) -> None:
+    """Apply KEY=VALUE overrides (dotted keys, YAML values). Unknown keys are an error (typos would otherwise
+    silently run the default configuration)."""
+    for item in items:
+        key, sep, raw = item.partition("=")
+        if not sep:
+            sys.exit(f"bad --set item {item!r}: expected KEY=VALUE")
+        *parents, leaf = key.split(".")
+        node = cfg
+        for k in parents:
+            if not isinstance(node.get(k), dict):
+                sys.exit(f"--set {key}: unknown section {k!r} (available: {sorted(node)})")
+            node = node[k]
+        if leaf not in node and key not in NEW_KEYS_ALLOWED:
+            sys.exit(f"--set {key}: unknown key {leaf!r} (available: {sorted(node)})")
+        node[leaf] = yaml.safe_load(raw)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--method", choices=METHODS, required=True)
@@ -71,7 +93,23 @@ def main() -> None:
     ap.add_argument("--results-dir", default="results")
     ap.add_argument("--checkpoint-dir", default="checkpoints")
     ap.add_argument("--overwrite", action="store_true", help="re-run folds that already have results")
+    ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE",
+                    help="override config values, e.g. loss.lambda_critic=1.0 teacher.k_set=[1,2,3,4,5,6] "
+                         "(values parsed as YAML); requires --tag")
+    ap.add_argument("--tag", help="name suffix for this configuration: results go to results/<method>@<tag>/")
+    ap.add_argument("--set-from-sweep", metavar="SWEEP", help="prepend the overrides of the configuration selected "
+                    "(by validation accuracy) in sweep SWEEP of this method; requires --tag")
     args = ap.parse_args()
+    if args.set_from_sweep:
+        from aved.selection import selected_overrides
+        inherited = selected_overrides(ROOT / args.results_dir, args.method, args.set_from_sweep, args.protocol)
+        print(f"overrides from sweep {args.set_from_sweep!r}: {' '.join(inherited)}")
+        args.set = inherited + list(args.set)
+    if (args.set or args.set_from_sweep) and not args.tag:
+        sys.exit("--set requires --tag, so that results of different configurations are kept apart")
+    if args.tag and not re.fullmatch(r"[A-Za-z0-9._-]+", args.tag):
+        sys.exit("--tag may only contain letters, digits, '.', '_' and '-'")
+    run_name = args.method + (f"@{args.tag}" if args.tag else "")
 
     pre_cfg = load_config(ROOT / args.preprocess_config)
     data_dir = ROOT / pre_cfg.output_dir
@@ -87,6 +125,7 @@ def main() -> None:
     if args.method == "eegnet":
         cfg = yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())
         method_cfg = {"model": cfg["model"], "training": dict(cfg["training"][args.protocol])}
+        apply_overrides(method_cfg, args.set)
         if args.max_epochs:
             method_cfg["training"]["max_epochs"] = args.max_epochs
         device = resolve_device(args.device)
@@ -94,7 +133,9 @@ def main() -> None:
         red = yaml.safe_load((ROOT / "configs/red.yaml").read_text())
         method_cfg = {"model": yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())["model"],
                       "training": dict(red["training"][args.protocol]), "teacher": dict(red["teacher"]),
-                      "loss": red["loss"], "variant": red["variants"][args.method]}
+                      "loss": dict(red["loss"]), "variant": red["variants"][args.method]}
+        method_cfg["teacher"].update(method_cfg["variant"].get("teacher", {}))   # variant-specific teacher
+        apply_overrides(method_cfg, args.set)
         if args.max_epochs:
             method_cfg["training"]["max_epochs"] = args.max_epochs
             method_cfg["teacher"]["max_epochs"] = args.max_epochs
@@ -106,15 +147,17 @@ def main() -> None:
     else:
         method_cfg = yaml.safe_load((ROOT / "configs/dcpm.yaml").read_text())
         method_cfg["context"] = args.method == "dcpm"
+        apply_overrides(method_cfg, args.set)
         device = torch.device("cpu")
 
-    run_dir = ROOT / args.results_dir / args.method / args.protocol / f"seed{args.seed}"
-    ckpt_dir = ROOT / args.checkpoint_dir / args.method / args.protocol / f"seed{args.seed}"
+    run_dir = ROOT / args.results_dir / run_name / args.protocol / f"seed{args.seed}"
+    ckpt_dir = ROOT / args.checkpoint_dir / run_name / args.protocol / f"seed{args.seed}"
     for d in (run_dir / "folds", run_dir / "predictions", run_dir / "history", ckpt_dir):
         d.mkdir(parents=True, exist_ok=True)
 
     run_info = {
-        "method": args.method, "protocol": args.protocol, "seed": args.seed, "method_config": method_cfg,
+        "method": args.method, "run_name": run_name, "overrides": args.set, "protocol": args.protocol,
+        "seed": args.seed, "method_config": method_cfg,
         "preprocessing_fingerprint": data_fp, "preprocessing_config": pre_cfg.to_dict(),
         "git_commit": git_commit(), "device": str(device),
         "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
@@ -127,7 +170,7 @@ def main() -> None:
 
     folds = make_folds(args.protocol, args.subjects, args.sessions)
     todo = [f for f in folds if args.overwrite or not (run_dir / "folds" / f"{f.name}.json").exists()]
-    print(f"{args.method} / {args.protocol} / seed {args.seed} on {device}: "
+    print(f"{run_name} / {args.protocol} / seed {args.seed} on {device}: "
           f"{len(folds)} folds selected, {len(folds) - len(todo)} already done, {len(todo)} to run")
 
     cache: dict[tuple, object] = {}

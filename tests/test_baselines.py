@@ -100,3 +100,15 @@ def test_red_student_shapes():
     from aved.models.red import REDStudent
     logits, recon = REDStudent(21, 58)(torch.zeros(4, 21, 58))
     assert logits.shape == (4, 2) and recon.shape == (4, 21, 58)
+
+
+def test_apply_overrides_parses_yaml_and_rejects_typos():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from run_baseline import apply_overrides
+    cfg = {"loss": {"tau": 2.0}, "teacher": {"k_set": [2, 3, 6]}}
+    apply_overrides(cfg, ["loss.tau=4", "teacher.k_set=[1, 2]", "teacher.train=false"])
+    assert cfg == {"loss": {"tau": 4}, "teacher": {"k_set": [1, 2], "train": False}}
+    with pytest.raises(SystemExit):
+        apply_overrides(cfg, ["loss.taus=1"])
+    with pytest.raises(SystemExit):
+        apply_overrides(cfg, ["los.tau=1"])

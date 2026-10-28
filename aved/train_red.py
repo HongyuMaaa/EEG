@@ -15,11 +15,16 @@ Student losses (switched on per variant, see configs/red.yaml):
               reachable signal is distilled into the student's classifier
     kd_naive  tau^2 KL(softmax(teacher(a)/tau) || softmax(student(x)/tau)): classic distillation from
               the teacher's view of the averaged signal (ablation; expected to transfer poorly)
+
+Controls: a variant may override teacher settings (``teacher`` key: e.g. k_set [1] = teacher trained on
+single trials; train: false = randomly initialised frozen teacher), and ``avg_aug`` trains the plain
+EEGNet on single trials plus random k-trial averages (cross-entropy only, no teacher).
 """
 
 from __future__ import annotations
 
 import copy
+import os
 import time
 from pathlib import Path
 
@@ -105,9 +110,10 @@ def train_teacher(fold: Fold, ds: Dataset, norm, model_cfg: dict, train_cfg: dic
     opt = torch.optim.Adam(model.parameters(), lr=train_cfg["lr"])
     gen = torch.Generator().manual_seed(seed + 1000)
     bs = train_cfg["batch_size"]
-    best = {"val_loss": np.inf, "epoch": -1, "state": None}
+    best = {"val_loss": np.inf, "epoch": 0, "state": copy.deepcopy(model.state_dict())}   # epoch 0 = initialisation
     t0 = time.perf_counter()
-    for epoch in range(1, tcfg["max_epochs"] + 1):
+    n_epochs = tcfg["max_epochs"] if tcfg.get("train", True) else 0                        # train: false -> random teacher
+    for epoch in range(1, n_epochs + 1):
         model.train()
         Xa, ya = zip(*[banks["tr"].sample_averages(X[idx["tr"]], y[idx["tr"]], tcfg["k_set"], gen)
                        for _ in range(tcfg["draws_per_epoch"])])
@@ -165,9 +171,12 @@ def train_red(fold: Fold, ds: Dataset, cfg: dict, variant: dict, device: torch.d
     mean, std = channel_stats(ds.X[tr])
     model_cfg, train_cfg = cfg["model"], cfg["training"]
 
+    avg_aug = variant.get("avg_aug", False)
+    if avg_aug and (variant["n2n"] or variant["critic"] or variant["kd_naive"]):
+        raise ValueError("avg_aug is a cross-entropy-only control")
     needs_teacher = variant["critic"] or variant["kd_naive"]
     teacher, tinfo = None, {}
-    if needs_teacher or cfg["teacher"].get("always_train", True):
+    if needs_teacher or (cfg["teacher"].get("always_train", True) and not avg_aug):
         if teacher_cache.exists():
             ck = torch.load(teacher_cache, map_location=device, weights_only=False)
             teacher = EEGNet(ds.X.shape[1], ds.X.shape[2], dropout=train_cfg["dropout"], **model_cfg).to(device)
@@ -178,8 +187,10 @@ def train_red(fold: Fold, ds: Dataset, cfg: dict, variant: dict, device: torch.d
         else:
             teacher, tinfo = train_teacher(fold, ds, (mean, std), model_cfg, train_cfg, cfg["teacher"], device, seed, log)
             teacher_cache.parent.mkdir(parents=True, exist_ok=True)
+            tmp = teacher_cache.with_suffix(f".tmp{os.getpid()}")       # atomic write: parallel runs may share the cache
             torch.save({"state_dict": teacher.state_dict(), "info": tinfo, "channel_mean": mean, "channel_std": std,
-                        "model_cfg": model_cfg, "dropout": train_cfg["dropout"], "fold": fold.name}, teacher_cache)
+                        "model_cfg": model_cfg, "dropout": train_cfg["dropout"], "fold": fold.name}, tmp)
+            os.replace(tmp, teacher_cache)
         for p in teacher.parameters():
             p.requires_grad_(False)
 
@@ -206,14 +217,19 @@ def train_red(fold: Fold, ds: Dataset, cfg: dict, variant: dict, device: torch.d
     t0 = time.perf_counter()
     for epoch in range(1, train_cfg["max_epochs"] + 1):
         student.train()
-        perm = torch.randperm(len(ytr), generator=gen).to(device)
+        Xep, yep = Xtr, ytr
+        if avg_aug:     # single trials + one fresh set of random k-trial averages per epoch (about 50/50)
+            Xa, ya = zip(*[bank.sample_averages(Xtr, ytr, variant["avg_aug_k"], gen)
+                           for _ in range(variant["avg_aug_draws"])])
+            Xep, yep = torch.cat([Xtr, *Xa]), torch.cat([ytr, *ya])
+        perm = torch.randperm(len(yep), generator=gen).to(device)
         sums = {"ce": 0.0, "n2n": 0.0, "critic": 0.0, "kd": 0.0}
         for i in range(0, len(perm), bs):
             b = perm[i:i + bs]
             if len(b) < 2:
                 continue
-            logits, recon = student(Xtr[b])
-            loss = F.cross_entropy(logits, ytr[b])
+            logits, recon = student(Xep[b])
+            loss = F.cross_entropy(logits, yep[b])
             sums["ce"] += loss.item() * len(b)
             if variant["n2n"]:
                 v = valid[b]
@@ -240,7 +256,7 @@ def train_red(fold: Fold, ds: Dataset, cfg: dict, variant: dict, device: torch.d
             opt.step()
             student.apply_max_norm()
         val_loss, val_acc = _eval(student.eegnet, X[iva], y[iva])
-        history.append({"epoch": epoch, **{f"train_{k}": v / len(ytr) for k, v in sums.items()},
+        history.append({"epoch": epoch, **{f"train_{k}": v / len(yep) for k, v in sums.items()},
                         "val_loss": val_loss, "val_acc": val_acc})
         if val_loss < best["val_loss"]:
             best = {"val_loss": val_loss, "epoch": epoch, "state": copy.deepcopy(student.state_dict())}

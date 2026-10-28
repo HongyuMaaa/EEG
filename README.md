@@ -13,7 +13,7 @@ decoding of miniature lateral visual evoked potentials (Xu et al., IEEE TBME 201
 | `docs/running_experiments.md` | **How to run the experiments on a local GPU and commit the results** |
 | `configs/` | Preprocessing, EEGNet and DCPM parameters |
 | `aved/` | Python package: event parsing, preprocessing, data splits, models, training |
-| `scripts/` | `preprocess.py`, `verify_preprocessing.py`, `run_baseline.py`, `run_all_baselines.py`, `summarize_results.py`, `compare_methods.py` |
+| `scripts/` | `preprocess.py`, `verify_preprocessing.py`, `run_baseline.py`, `run_all_baselines.py`, `summarize_results.py`, `compare_methods.py`, `run_sweep.py`, `select_config.py` |
 | `tests/` | Leakage and model tests (`python -m pytest -q tests`) |
 | `reports/` | Preprocessing verification report and trial counts |
 | `results/` | Experiment results (committed after each run) |
