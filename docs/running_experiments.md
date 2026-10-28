@@ -307,40 +307,50 @@ python scripts/compare_methods.py --protocol within --exclude-sessions 2 5 --out
   immediately rather than after the controls.
 - **Resuming:** every lane can be restarted; finished folds are skipped.
 
+Run everything from **one** PowerShell window in which your Conda environment is active. The
+script records that environment's `python.exe` and passes it to the lane windows explicitly. It
+starts those windows *without* your PowerShell profile, because Conda's profile hook would
+otherwise re-activate `base` in each new window (no CUDA PyTorch → errors). Each lane prints the
+interpreter, PyTorch version and GPU before it starts, and stops immediately if CUDA is missing.
+
 ```powershell
+conda activate torch-gpu
 cd <path>\EEG
 git pull
-.\.venv\Scripts\Activate.ps1
+Set-ExecutionPolicy -Scope Process Bypass                                  # this window only; allows .\scripts\*.ps1
 python -m pytest -q tests                                                  # expect "11 passed"
 powercfg /change standby-timeout-ac 0                                      # keep the PC awake (plugged in)
 
 # 1) Smoke test of the whole schedule (a few minutes; writes to results_smoke\, git-ignored)
-powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Smoke
+.\scripts\round2.ps1 -Smoke
 #    -> four windows open; wait until each shows "LANE n FINISHED", then:
-powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane report -Smoke
+.\scripts\round2.ps1 -Lane report -Smoke
 Remove-Item -Recurse -Force results_smoke, checkpoints_smoke              # clean up
 
 # 2) The real run
-powershell -ExecutionPolicy Bypass -File scripts\round2.ps1
+.\scripts\round2.ps1
 ```
+
+If the lanes still pick the wrong interpreter, pass it explicitly:
+`.\scripts\round2.ps1 -Python (Get-Command python).Source` (run inside the activated window).
 
 **While it runs:**
 - Check the GPU with `nvidia-smi -l 10`. Peak load is six training processes: lanes 1–3 plus
   three sweep configurations. If memory runs short or the system gets sluggish, close lane 4's
   window and restart it with fewer sweep workers:
-  `powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane 4 -SweepWorkers 2`.
+  `.\scripts\round2.ps1 -Lane 4 -SweepWorkers 2`.
   It resumes where it stopped.
 - **Push early:** when lanes 1 and 2 finish, commit and push their results (section 4). They
   decide the Chapter 1 framing, and you don't need to wait for lane 4.
 - **If a lane fails,** its window stays open with the error. Fix the cause, then rerun only that
-  lane, e.g. `powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane 3`.
+  lane, e.g. `.\scripts\round2.ps1 -Lane 3`.
 - **Logs** are in `logs\`. Logs written by Windows PowerShell 5.1 are UTF-16, which is fine
   for Notepad and VS Code.
 
 **After all four lanes finish:**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane report     # summary, sweep and comparison tables
+.\scripts\round2.ps1 -Lane report     # summary, sweep and comparison tables
 git add results/
 git commit -m "Chapter 1 round 2: controls, seeds, sweeps, tuned RED"
 git pull --rebase

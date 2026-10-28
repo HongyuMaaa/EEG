@@ -15,20 +15,28 @@
     all (default): open one PowerShell window per lane. 1-4: run that lane in this window.
     report: summary, comparison tables and sweep tables (run after all lanes have finished).
 
+.PARAMETER Python
+    Python interpreter to use. Default: the active Conda environment ($env:CONDA_PREFIX\python.exe), else
+    .venv\Scripts\python.exe, else the first python on PATH. The resolved path is passed on to the lane windows,
+    which start without the PowerShell profile so that Conda's auto-activation cannot switch them to "base".
+
 .PARAMETER Smoke
     Run the whole schedule on 2 subjects, 1 test session and 2 epochs, into results_smoke/ and
     checkpoints_smoke/ (git-ignored). Takes a few minutes; use it to check the setup first.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Smoke
-    powershell -ExecutionPolicy Bypass -File scripts\round2.ps1
-    powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane report
+    conda activate torch-gpu
+    Set-ExecutionPolicy -Scope Process Bypass
+    .\scripts\round2.ps1 -Smoke
+    .\scripts\round2.ps1
+    .\scripts\round2.ps1 -Lane report
 #>
 param(
     [ValidateSet('all', '1', '2', '3', '4', 'report')] [string]$Lane = 'all',
     [switch]$Smoke,
     [int]$SweepWorkers = 3,
-    [string]$Device = 'cuda'
+    [string]$Device = 'cuda',
+    [string]$Python = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,9 +44,42 @@ $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 New-Item -ItemType Directory -Force -Path (Join-Path $Root 'logs') | Out-Null
 
-$Py = Join-Path $Root '.venv\Scripts\python.exe'
-if (-not (Test-Path $Py)) { $Py = 'python' }
+# ---- interpreter: explicit -Python, else active Conda env, else .venv, else python on PATH ----
+if ($Python) {
+    $Py = $Python
+} elseif ($env:CONDA_PREFIX -and (Test-Path (Join-Path $env:CONDA_PREFIX 'python.exe'))) {
+    $Py = Join-Path $env:CONDA_PREFIX 'python.exe'
+} elseif (Test-Path (Join-Path $Root '.venv\Scripts\python.exe')) {
+    $Py = Join-Path $Root '.venv\Scripts\python.exe'
+} else {
+    $cmd = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $cmd) { throw 'No Python found. Run "conda activate torch-gpu" first, or pass -Python <path to python.exe>.' }
+    $Py = $cmd.Source
+}
+$Py = (Resolve-Path $Py).Path
+
+# If the interpreter lives in a Conda environment, put that environment's DLL folders first on PATH
+# (what "conda activate" does), so CUDA/MKL libraries load even in windows where it was not activated.
+$EnvDir = Split-Path -Parent $Py
+if (Test-Path (Join-Path $EnvDir 'conda-meta')) {
+    $env:CONDA_PREFIX = $EnvDir
+    $env:PATH = (@($EnvDir, "$EnvDir\Library\mingw-w64\bin", "$EnvDir\Library\usr\bin", "$EnvDir\Library\bin",
+                   "$EnvDir\Scripts", "$EnvDir\bin") -join ';') + ';' + $env:PATH
+}
 if (-not $env:OMP_NUM_THREADS) { $env:OMP_NUM_THREADS = '2' }   # several processes share the CPU
+
+function Test-Environment {
+    Write-Host "Python: $Py" -ForegroundColor Yellow
+    # no quote characters inside the code: Windows PowerShell 5.1 strips them from native-command arguments
+    $check = 'import torch, mne, yaml, sklearn; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)'
+    Write-Host 'torch version, CUDA available, GPU:' -ForegroundColor Yellow
+    & $Py -c $check
+    if ($LASTEXITCODE -ne 0) { throw "This Python cannot import the required packages: $Py  (activate torch-gpu or pass -Python)" }
+    if ($Device -like 'cuda*') {
+        & $Py -c 'import sys, torch; sys.exit(0 if torch.cuda.is_available() else 1)'
+        if ($LASTEXITCODE -ne 0) { throw "CUDA is not available in $Py. Use the torch-gpu environment, or -Device cpu." }
+    }
+}
 
 if ($Smoke) {
     $ResultsDir = 'results_smoke'
@@ -74,18 +115,21 @@ function Invoke-Sweep([string]$Name, [string[]]$Grid, [string]$BaseFrom) {
 
 $Stamp = { Get-Date -Format 'yyyy-MM-dd HH:mm' }
 
+Test-Environment
+
 switch ($Lane) {
     'all' {
         $shell = (Get-Process -Id $PID).Path            # powershell.exe or pwsh.exe, whichever runs this script
         foreach ($l in 1..4) {
-            $a = @('-NoExit', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Lane', "$l",
-                   '-Device', $Device, '-SweepWorkers', "$SweepWorkers")
+            # -NoProfile: the profile's Conda hook would re-activate "base" in the new window
+            $a = @('-NoProfile', '-NoExit', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Lane', "$l",
+                   '-Device', $Device, '-SweepWorkers', "$SweepWorkers", '-Python', "`"$Py`"")
             if ($Smoke) { $a += '-Smoke' }
             Start-Process -FilePath $shell -ArgumentList $a -WorkingDirectory $Root
             Start-Sleep -Seconds 2
         }
         Write-Host "Started 4 lane windows. When all show 'LANE n FINISHED', run:"
-        Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane report$(if ($Smoke) {' -Smoke'})"
+        Write-Host "  .\scripts\round2.ps1 -Lane report$(if ($Smoke) {' -Smoke'})"
     }
     '1' {
         $Host.UI.RawUI.WindowTitle = 'round2 lane 1: red_selfteacher, eegnet seeds 1-2'
