@@ -20,6 +20,9 @@
     .venv\Scripts\python.exe, else the first python on PATH. The resolved path is passed on to the lane windows,
     which start without the PowerShell profile so that Conda's auto-activation cannot switch them to "base".
 
+.PARAMETER Force
+    Skip the check that refuses to start (all) or report (report) while lanes of the same kind are still running.
+
 .PARAMETER Smoke
     Run the whole schedule on 2 subjects, 1 test session and 2 epochs, into results_smoke/ and
     checkpoints_smoke/ (git-ignored). Takes a few minutes; use it to check the setup first.
@@ -36,7 +39,8 @@ param(
     [switch]$Smoke,
     [int]$SweepWorkers = 3,
     [string]$Device = 'cuda',
-    [string]$Python = ''
+    [string]$Python = '',
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -114,11 +118,42 @@ function Invoke-Sweep([string]$Name, [string[]]$Grid, [string]$BaseFrom) {
 }
 
 $Stamp = { Get-Date -Format 'yyyy-MM-dd HH:mm' }
+$Kind = if ($Smoke) { 'smoke' } else { 'real' }
+$TitlePrefix = if ($Smoke) { '[SMOKE] ' } else { '' }
+
+# Running-lane markers: logs\round2_<kind>_lane<N>.pid holds the PID of the window running that lane.
+function Get-RunningLanes([string]$K) {
+    Get-ChildItem (Join-Path $Root 'logs') -Filter "round2_${K}_lane*.pid" -ErrorAction SilentlyContinue | Where-Object {
+        $p = [int](Get-Content $_.FullName -TotalCount 1)
+        if (Get-Process -Id $p -ErrorAction SilentlyContinue) { $true } else { Remove-Item $_.FullName; $false }
+    }
+}
+function Assert-NoRunningLanes([string]$K, [string]$What) {
+    $running = @(Get-RunningLanes $K)
+    if ($running.Count -gt 0 -and -not $Force) {
+        throw "$($running.Count) $K lane(s) still running ($(($running | ForEach-Object { $_.BaseName }) -join ', ')). " +
+              "Wait until every lane window shows 'LANE n FINISHED' before $What (or add -Force)."
+    }
+}
+function Invoke-Lane([int]$N, [string]$Title, [scriptblock]$Body) {
+    $Host.UI.RawUI.WindowTitle = "${TitlePrefix}round2 lane ${N}: $Title"
+    $marker = Join-Path $Root "logs\round2_${Kind}_lane$N.pid"
+    Set-Content -Path $marker -Value $PID
+    Write-Host "${TitlePrefix}lane $N started $(& $Stamp)"
+    try {
+        & $Body
+        Write-Host "${TitlePrefix}LANE $N FINISHED $(& $Stamp)" -ForegroundColor Green
+    } finally {
+        Remove-Item $marker -ErrorAction SilentlyContinue
+    }
+}
 
 Test-Environment
 
 switch ($Lane) {
     'all' {
+        Assert-NoRunningLanes $Kind 'starting them again'
+        if (-not $Smoke) { Assert-NoRunningLanes 'smoke' 'starting the real run (close or finish the smoke windows)' }
         $shell = (Get-Process -Id $PID).Path            # powershell.exe or pwsh.exe, whichever runs this script
         foreach ($l in 1..4) {
             # -NoProfile: the profile's Conda hook would re-activate "base" in the new window
@@ -128,59 +163,60 @@ switch ($Lane) {
             Start-Process -FilePath $shell -ArgumentList $a -WorkingDirectory $Root
             Start-Sleep -Seconds 2
         }
-        Write-Host "Started 4 lane windows. When all show 'LANE n FINISHED', run:"
+        Write-Host "Started 4 lane windows. DO NOT run anything else until all show 'LANE n FINISHED'. Then run:"
         Write-Host "  .\scripts\round2.ps1 -Lane report$(if ($Smoke) {' -Smoke'})"
     }
     '1' {
-        $Host.UI.RawUI.WindowTitle = 'round2 lane 1: red_selfteacher, eegnet seeds 1-2'
-        Write-Host "lane 1 started $(& $Stamp)"
-        Invoke-Run 'red_selfteacher' 0
-        Invoke-Run 'eegnet' 1
-        Invoke-Run 'eegnet' 2
-        Write-Host "LANE 1 FINISHED $(& $Stamp)" -ForegroundColor Green
+        Invoke-Lane 1 'red_selfteacher, eegnet seeds 1-2' {
+            Invoke-Run 'red_selfteacher' 0
+            Invoke-Run 'eegnet' 1
+            Invoke-Run 'eegnet' 2
+        }
     }
     '2' {
-        $Host.UI.RawUI.WindowTitle = 'round2 lane 2: red_randteacher, eegnet_avgaug'
-        Write-Host "lane 2 started $(& $Stamp)"
-        Invoke-Run 'red_randteacher' 0
-        Invoke-Run 'eegnet_avgaug' 0
-        Write-Host "LANE 2 FINISHED $(& $Stamp)" -ForegroundColor Green
+        Invoke-Lane 2 'red_randteacher, eegnet_avgaug' {
+            Invoke-Run 'red_randteacher' 0
+            Invoke-Run 'eegnet_avgaug' 0
+        }
     }
     '3' {
-        $Host.UI.RawUI.WindowTitle = 'round2 lane 3: red seeds 1-2'
-        Write-Host "lane 3 started $(& $Stamp)"
-        Invoke-Run 'red' 1
-        Invoke-Run 'red' 2
-        Write-Host "LANE 3 FINISHED $(& $Stamp)" -ForegroundColor Green
+        Invoke-Lane 3 'red seeds 1-2' {
+            Invoke-Run 'red' 1
+            Invoke-Run 'red' 2
+        }
     }
     '4' {
-        $Host.UI.RawUI.WindowTitle = 'round2 lane 4: sweeps, then red@tuned seeds 0-2'
-        Write-Host "lane 4 started $(& $Stamp)"
-        Invoke-Sweep 'weights' @('loss.lambda_critic=[0.5, 1, 2]', 'loss.lambda_n2n=[0.3, 1, 3]') ''
-        Invoke-Sweep 'tau' @('loss.tau=[1, 2, 4]') 'weights'
-        Invoke-Sweep 'teacher' @('teacher.k_set=[[2, 3, 6], [1, 2, 3, 4, 5, 6]]', 'loss.beta_lateral=[1, 5]') 'tau'
+        Invoke-Lane 4 'sweeps, then red@tuned seeds 0-2' {
+            Invoke-Sweep 'weights' @('loss.lambda_critic=[0.5, 1, 2]', 'loss.lambda_n2n=[0.3, 1, 3]') ''
+            Invoke-Sweep 'tau' @('loss.tau=[1, 2, 4]') 'weights'
+            Invoke-Sweep 'teacher' @('teacher.k_set=[[2, 3, 6], [1, 2, 3, 4, 5, 6]]', 'loss.beta_lateral=[1, 5]') 'tau'
 
-        # final runs of the selected configuration: three seeds in parallel
-        $procs = @()
-        foreach ($s in 0, 1, 2) {
-            $a = @('-u', 'scripts\run_baseline.py', '--method', 'red', '--protocol', 'within', '--seed', "$s",
-                   '--set-from-sweep', 'teacher', '--tag', 'tuned') + $Extra + $Subset
-            Write-Host ">> python $($a -join ' ')  (background, log logs\red@tuned_within_seed$s.log)" -ForegroundColor Cyan
-            $p = Start-Process -FilePath $Py -ArgumentList $a -NoNewWindow -PassThru `
-                 -RedirectStandardOutput "logs\red@tuned_within_seed$s.log" -RedirectStandardError "logs\red@tuned_within_seed$s.err.log"
-            $null = $p.Handle                               # keeps the exit code available after the process ends
-            $procs += $p
+            # final runs of the selected configuration: three seeds in parallel
+            $procs = @()
+            foreach ($s in 0, 1, 2) {
+                $a = @('-u', 'scripts\run_baseline.py', '--method', 'red', '--protocol', 'within', '--seed', "$s",
+                       '--set-from-sweep', 'teacher', '--tag', 'tuned') + $Extra + $Subset
+                Write-Host ">> python $($a -join ' ')  (background, log logs\red@tuned_within_seed$s.log)" -ForegroundColor Cyan
+                $p = Start-Process -FilePath $Py -ArgumentList $a -NoNewWindow -PassThru `
+                     -RedirectStandardOutput "logs\red@tuned_within_seed$s.log" -RedirectStandardError "logs\red@tuned_within_seed$s.err.log"
+                $null = $p.Handle                               # keeps the exit code available after the process ends
+                $procs += $p
+            }
+            $procs | Wait-Process
+            foreach ($p in $procs) {
+                if ($p.ExitCode -ne 0) { throw "a red@tuned run failed (exit code $($p.ExitCode)); see logs\red@tuned_*.log" }
+            }
         }
-        $procs | Wait-Process
-        foreach ($p in $procs) {
-            if ($p.ExitCode -ne 0) { throw "a red@tuned run failed (exit code $($p.ExitCode)); see logs\red@tuned_*.log" }
-        }
-        Write-Host "LANE 4 FINISHED $(& $Stamp)" -ForegroundColor Green
     }
     'report' {
+        Assert-NoRunningLanes $Kind 'writing the report' 
         $rd = @('--results-dir', $ResultsDir)
         Invoke-Py (@('scripts\summarize_results.py') + $rd) ''
         foreach ($sw in 'weights', 'tau', 'teacher') {
+            if (-not (Get-ChildItem $ResultsDir -Directory -Filter "red@sw-$sw-*" -ErrorAction SilentlyContinue)) {
+                Write-Warning "no results for sweep '$sw' yet - skipped"
+                continue
+            }
             Invoke-Py (@('scripts\select_config.py', '--method', 'red', '--sweep', $sw, '--out', "$ResultsDir\sweep_$sw.md") + $rd) ''
         }
         $methods = @('eegnet', 'dcpm', 'eegnet_avgaug', 'kd_naive', 'red_n2n', 'red_critic', 'red_classmean',

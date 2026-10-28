@@ -197,6 +197,8 @@ def main() -> None:
 
 def save_fold(fold, ds, out, run_dir: Path, ckpt_dir: Path) -> None:
     te = out["test_mask"]
+    for d in (run_dir / "folds", run_dir / "predictions", run_dir / "history", ckpt_dir):
+        d.mkdir(parents=True, exist_ok=True)
     pred = pd.DataFrame({
         "subject": ds.subject[te], "session": ds.session[te], "trial": ds.trial[te],
         "y": ds.y[te], "pred": out["pred"], "score": np.round(out["score"], 6),
