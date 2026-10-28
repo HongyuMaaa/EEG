@@ -44,6 +44,13 @@ def diagnostics(root: Path, method: str, protocol: str) -> dict:
     return {k: float(np.mean(v)) for k, v in vals.items() if v}
 
 
+def trains_decoder(root: Path, method: str, protocol: str) -> bool:
+    """R^2 is only meaningful when the reconstruction loss trains the decoder."""
+    for f in (root / method / protocol).glob("seed*/run_info.json"):
+        return bool(json.loads(f.read_text())["method_config"].get("variant", {}).get("n2n", False))
+    return False
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--protocol", required=True)
@@ -71,7 +78,8 @@ def main() -> None:
         p = wilcoxon(a, r).pvalue if m != args.reference and len(common) > 5 and (d != 0).any() else float("nan")
         dg = diagnostics(root, m, args.protocol)
         teacher = (" / ".join(f"{100 * dg[k]:.1f}" for k in DIAGNOSTICS[:3]) if "teacher_test_acc_avg1" in dg else "")
-        recon = f"{dg['recon_r2_test']:.3f} / {dg['recon_r2_lateral_test']:.3f}" if "recon_r2_test" in dg else ""
+        recon = (f"{dg['recon_r2_test']:.3f} / {dg['recon_r2_lateral_test']:.3f}"
+                 if "recon_r2_test" in dg and trains_decoder(root, m, args.protocol) else "")
         lines.append(f"| {m} | {len(common)} | {100 * a.mean():.2f} ± {100 * a.std():.2f} | {100 * d.mean():+.2f} "
                      f"| {int((d > 0).sum())}/{len(common)} | {p:.4f} | {teacher} | {recon} |")
     text = "\n".join(lines) + "\n"
