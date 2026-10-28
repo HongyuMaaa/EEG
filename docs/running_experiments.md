@@ -290,6 +290,63 @@ python scripts/compare_methods.py --protocol within --exclude-sessions 2 5 --out
   for selection.
 - Methods with several seeds are averaged per subject (column `seeds`).
 
+## 3d. Round 2 in parallel on Windows (PowerShell, recommended)
+
+`scripts/round2.ps1` runs all of section 3c in four parallel lanes, each in its own window:
+
+| Lane | Runs (in order) | Estimated time |
+|---|---|---|
+| 1 | `red_selfteacher` s0 → `eegnet` s1 → `eegnet` s2 | ~8 h |
+| 2 | `red_randteacher` s0 → `eegnet_avgaug` s0 | ~7 h |
+| 3 | `red` s1 → `red` s2 | ~11 h |
+| 4 | sweeps `weights` → `tau` → `teacher` (3 configurations at a time), then `red@tuned` seeds 0, 1, 2 in parallel | ~17–22 h (critical path) |
+
+- **Estimated total wall time:** about one day, against about 3 days run one after another.
+  Lanes write to different result directories, so they never interfere.
+- **Order of the critical path:** lane 4 is the longest dependency chain, so it starts
+  immediately rather than after the controls.
+- **Resuming:** every lane can be restarted; finished folds are skipped.
+
+```powershell
+cd <path>\EEG
+git pull
+.\.venv\Scripts\Activate.ps1
+python -m pytest -q tests                                                  # expect "11 passed"
+powercfg /change standby-timeout-ac 0                                      # keep the PC awake (plugged in)
+
+# 1) Smoke test of the whole schedule (a few minutes; writes to results_smoke\, git-ignored)
+powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Smoke
+#    -> four windows open; wait until each shows "LANE n FINISHED", then:
+powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane report -Smoke
+Remove-Item -Recurse -Force results_smoke, checkpoints_smoke              # clean up
+
+# 2) The real run
+powershell -ExecutionPolicy Bypass -File scripts\round2.ps1
+```
+
+**While it runs:**
+- Check the GPU with `nvidia-smi -l 10`. Peak load is six training processes: lanes 1–3 plus
+  three sweep configurations. If memory runs short or the system gets sluggish, close lane 4's
+  window and restart it with fewer sweep workers:
+  `powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane 4 -SweepWorkers 2`.
+  It resumes where it stopped.
+- **Push early:** when lanes 1 and 2 finish, commit and push their results (section 4). They
+  decide the Chapter 1 framing, and you don't need to wait for lane 4.
+- **If a lane fails,** its window stays open with the error. Fix the cause, then rerun only that
+  lane, e.g. `powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane 3`.
+- **Logs** are in `logs\`. Logs written by Windows PowerShell 5.1 are UTF-16, which is fine
+  for Notepad and VS Code.
+
+**After all four lanes finish:**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\round2.ps1 -Lane report     # summary, sweep and comparison tables
+git add results/
+git commit -m "Chapter 1 round 2: controls, seeds, sweeps, tuned RED"
+git pull --rebase
+git push origin claude/elegant-babbage-ebonby
+```
+
 ## 4. Check, commit and push the results
 
 ```bash

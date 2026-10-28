@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
+CONFIG_DIR = Path(__file__).resolve().parents[1] / "configs"
+
 
 def fold_table(run_dir: Path) -> pd.DataFrame:
     rows = []
@@ -30,8 +32,29 @@ def sweep_table(root: Path, method: str, sweep: str, protocol: str = "within") -
         rows.append({"configuration": name, "folds": len(d), "val_acc": d.val_acc.mean(), "test_acc": d.test_acc.mean(),
                      "overrides": json.loads(next((Path(root) / name / protocol).glob("seed*/run_info.json"))
                                              .read_text())["overrides"]})
-    table = pd.DataFrame(rows).sort_values("val_acc", ascending=False, kind="stable").reset_index(drop=True)
+    table = pd.DataFrame(rows)
+    table["n_changed"] = [n_changed_from_defaults(o, protocol) for o in table.overrides]
+    # highest validation accuracy; ties -> fewest settings changed from the defaults, then name
+    table = table.sort_values(["val_acc", "n_changed", "configuration"], ascending=[False, True, True],
+                              kind="stable").reset_index(drop=True)
     return table, common
+
+
+def n_changed_from_defaults(overrides: list[str], protocol: str) -> int:
+    """Number of overrides whose value differs from configs/red.yaml (training.* looked up per protocol)."""
+    import yaml
+    defaults = yaml.safe_load((CONFIG_DIR / "red.yaml").read_text())
+    n = 0
+    for item in overrides:
+        key, _, raw = item.partition("=")
+        node = defaults
+        path = key.split(".")
+        if path[0] == "training":
+            path = ["training", protocol] + path[1:]
+        for k in path:
+            node = node.get(k) if isinstance(node, dict) else None
+        n += node != yaml.safe_load(raw)
+    return n
 
 
 def selected_overrides(root: Path, method: str, sweep: str, protocol: str = "within") -> list[str]:

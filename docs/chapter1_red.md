@@ -122,7 +122,8 @@ python scripts/run_baseline.py --method red --protocol within --tag lc1 --set lo
 28 subjects, test sessions 1 and 4, so validation sessions 2 and 5 (56 folds).
 
 `scripts/select_config.py` ranks configurations by **mean validation accuracy**. Test accuracy
-is displayed but never used for selection.
+is displayed but never used for selection. Ties go to the configuration that changes fewer
+settings from `configs/red.yaml` (the conservative choice), then to name order.
 
 | Sweep | Grid | Starts from |
 |---|---|---|
