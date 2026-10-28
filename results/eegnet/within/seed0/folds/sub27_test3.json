@@ -11,21 +11,21 @@
     5,
     6
   ],
-  "accuracy": 0.75625,
+  "accuracy": 0.7583333333333333,
   "per_subject": {
     "27": {
-      "accuracy": 0.75625,
+      "accuracy": 0.7583333333333333,
       "n_test": 480
     }
   },
-  "best_epoch": 300,
-  "epochs_run": 300,
-  "val_acc": 0.7604166865348816,
-  "test_loss": 0.4937692880630493,
-  "train_time_s": 30.1,
+  "best_epoch": 301,
+  "epochs_run": 351,
+  "val_acc": 0.7666667103767395,
+  "test_loss": 0.49569037556648254,
+  "train_time_s": 44.6,
   "n_train": 1920,
   "n_val": 480,
   "n_test": 480,
   "device": "cuda",
-  "git_commit": "a0ee08c9c4e3719b82fc69e78b37f9c50f7b811b"
+  "git_commit": "3e4bd62f3c08632242bd315e9cf8b8abbe4a46b4"
 }

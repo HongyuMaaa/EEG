@@ -18,14 +18,14 @@
       "n_test": 480
     }
   },
-  "best_epoch": 296,
-  "epochs_run": 300,
-  "val_acc": 0.9291667342185974,
-  "test_loss": 0.13802944123744965,
-  "train_time_s": 31.3,
+  "best_epoch": 368,
+  "epochs_run": 418,
+  "val_acc": 0.9375000596046448,
+  "test_loss": 0.13328737020492554,
+  "train_time_s": 56.8,
   "n_train": 1920,
   "n_val": 480,
   "n_test": 480,
   "device": "cuda",
-  "git_commit": "a0ee08c9c4e3719b82fc69e78b37f9c50f7b811b"
+  "git_commit": "3e4bd62f3c08632242bd315e9cf8b8abbe4a46b4"
 }

@@ -22,10 +22,10 @@
   "epochs_run": 184,
   "val_acc": 0.6958333849906921,
   "test_loss": 0.5166347622871399,
-  "train_time_s": 18.6,
+  "train_time_s": 23.1,
   "n_train": 1920,
   "n_val": 480,
   "n_test": 480,
   "device": "cuda",
-  "git_commit": "a0ee08c9c4e3719b82fc69e78b37f9c50f7b811b"
+  "git_commit": "3e4bd62f3c08632242bd315e9cf8b8abbe4a46b4"
 }

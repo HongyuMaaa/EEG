@@ -18,7 +18,7 @@
       "dropout": 0.5,
       "batch_size": 64,
       "lr": 0.001,
-      "max_epochs": 300,
+      "max_epochs": 500,
       "patience": 50
     }
   },
@@ -55,7 +55,7 @@
       "ptp_threshold_uv": 100.0
     }
   },
-  "git_commit": "a0ee08c9c4e3719b82fc69e78b37f9c50f7b811b",
+  "git_commit": "3e4bd62f3c08632242bd315e9cf8b8abbe4a46b4",
   "device": "cuda",
   "gpu": "NVIDIA GeForce RTX 3060",
   "environment": {
@@ -65,5 +65,5 @@
     "platform": "Windows-10-10.0.26200-SP0"
   },
   "max_epochs_override": null,
-  "started": "2026-10-27 00:24:07"
+  "started": "2026-10-27 09:35:56"
 }
