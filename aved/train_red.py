@@ -204,6 +204,8 @@ def train_red(fold: Fold, ds: Dataset, cfg: dict, variant: dict, device: torch.d
         target, valid = bank.loo_targets(Xtr)
     elif variant["target"] == "class_mean":
         target, valid = _class_mean_targets(Xtr, ytr, ds.subject[tr]), torch.ones(len(ytr), dtype=torch.bool, device=device)
+    elif variant["target"] == "self":       # autoencoder: reconstruct the input trial itself (no averaging)
+        target, valid = Xtr, torch.ones(len(ytr), dtype=torch.bool, device=device)
     else:
         raise ValueError(variant["target"])
     P = lateral_operator(ds.ch_names, device)

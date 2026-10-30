@@ -37,3 +37,6 @@ variants:
                     teacher: {train: false}}                       # randomly initialised frozen teacher
   eegnet_avgaug:   {n2n: false, critic: false, kd_naive: false, target: group_loo,
                     avg_aug: true, avg_aug_k: [2, 3, 6], avg_aug_draws: 6}   # EEGNet on singles + random averages
+  # --- round 3 control: no averaging anywhere (see reports/chapter1_round2_analysis.md) ---
+  red_autoenc_self: {n2n: true, critic: true, kd_naive: false, target: self,
+                     teacher: {k_set: [1], val_k: 1}}              # reconstruct the input itself; single-trial teacher

@@ -83,6 +83,7 @@ position.
 | `red_selfteacher` | ✓ | ✓ | ✓ | | group LOO average | **Control:** teacher trained on *single trials* (k = 1). Is averaging knowledge the cause of the gain? |
 | `red_randteacher` | ✓ | ✓ | ✓ | | group LOO average | **Control:** randomly initialised frozen teacher. What does an arbitrary fixed head contribute? |
 | `eegnet_avgaug` | ✓ | | | | | **Baseline:** EEGNet on single trials plus random k-trial averages (k ∈ {2, 3, 6}), about 50/50, cross-entropy only |
+| `red_autoenc_self` | ✓ | ✓ | ✓ | | the input trial itself | **Control (round 3):** single-trial teacher *and* autoencoder target. No averaging anywhere. Does averaging matter at all? |
 
 ### Diagnostics saved per fold
 
