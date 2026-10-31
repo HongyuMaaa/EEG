@@ -92,3 +92,43 @@ averaged-input teacher can be presented as an equivalent variant.
 
 After that, Chapter 1's experiments are complete: next come the figures, the write-up, and an
 update of the midterm slides with these measured numbers.
+
+## 5. Final controls (results up to `62566e0`)
+
+`red_autoenc_self` seed 2 is complete, as is the loss-scale control `red_autoenc_self@ln0.3`
+(seed 1: 163/168 folds). Three seeds, subject level:
+
+| Comparison | Δ (pp) | 95% CI | Subjects improved | p |
+|---|---|---|---|---|
+| `red_autoenc_self` (λ_n2n = 1) − EEGNet | −0.84 | [−1.08, −0.62] | 1/28 | 1 × 10⁻⁷ |
+| `red_autoenc_self@ln0.3` − EEGNet | +0.05 | [−0.08, 0.18] | 16/28 | 0.32 |
+| `red_selfteacher` − `red_autoenc_self@ln0.3` | **+0.76** | [0.58, 0.96] | **27/28** | 1 × 10⁻⁷ |
+
+Per-seed Δ vs EEGNet:
+
+| Method | Seed 0 | Seed 1 | Seed 2 |
+|---|---|---|---|
+| `red_autoenc_self` | −1.09 | −0.75 | −0.69 |
+| `red_autoenc_self@ln0.3` | −0.06 | +0.07 | +0.15 |
+
+**Fully matched weights.** Seed 0, test sessions 1 and 4, λ_critic = 0.5, λ_n2n = 0.3: the
+averaged target (`red@sw-weights-lc0.5_ln0.3`) beats the self-target by **+0.76 pp**
+(21/28 subjects, p = 0.0007).
+
+**Revised reading:**
+- The *harm* of the self-target at λ_n2n = 1 was largely a loss-scale effect. At a matched
+  scale the self-target is neutral.
+- The *gain* nevertheless requires the averaged, independent-noise target: +0.76 pp over the
+  self-target at matched weights, consistently across subjects and seeds.
+
+The conclusion of §3 stands, with the wording "averaged targets are necessary for the gain"
+rather than "self-targets are harmful".
+
+**Chapter 1 experiments are complete.**
+
+| Final method | Accuracy | Δ vs EEGNet |
+|---|---|---|
+| `red_selfteacher` (single-trial critic, averaged reconstruction targets) | 75.30% | +0.81 pp (26/28) |
+| `red` (averaged-input critic) | 75.24% | +0.75 pp (27/28) |
+| EEGNet | 74.48% | |
+| DCPM | 72.57% | |
