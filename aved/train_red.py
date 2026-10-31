@@ -204,6 +204,12 @@ def train_red(fold: Fold, ds: Dataset, cfg: dict, variant: dict, device: torch.d
         target, valid = bank.loo_targets(Xtr)
     elif variant["target"] == "class_mean":
         target, valid = _class_mean_targets(Xtr, ytr, ds.subject[tr]), torch.ones(len(ytr), dtype=torch.bool, device=device)
+    elif variant["target"] == "group_loo_aligned":   # latency-aligned leave-one-out targets (aved/alignment.py)
+        from .alignment import aligned_loo_targets
+        tgt, vld, mean_shift = aligned_loo_targets(Xtr.cpu().numpy(), ds.group[tr], variant.get("align_max_shift", 3),
+                                                   variant.get("align_iters", 3))
+        target, valid = torch.from_numpy(tgt).to(device), torch.from_numpy(vld).to(device)
+        log(f"  aligned targets: mean |shift| {mean_shift:.2f} samples")
     elif variant["target"] == "self":       # autoencoder: reconstruct the input trial itself (no averaging)
         target, valid = Xtr, torch.ones(len(ytr), dtype=torch.bool, device=device)
     else:

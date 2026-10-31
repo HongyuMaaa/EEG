@@ -40,3 +40,6 @@ variants:
   # --- round 3 control: no averaging anywhere (see reports/chapter1_round2_analysis.md) ---
   red_autoenc_self: {n2n: true, critic: true, kd_naive: false, target: self,
                      teacher: {k_set: [1], val_k: 1}}              # reconstruct the input itself; single-trial teacher
+  # --- direction 2 pilot: latency-aligned repetition targets (aved/alignment.py) ---
+  red_aligned:      {n2n: true, critic: true, kd_naive: false, target: group_loo_aligned, align_max_shift: 3,
+                     align_iters: 3, teacher: {k_set: [1], val_k: 1}}   # = red_selfteacher with aligned targets

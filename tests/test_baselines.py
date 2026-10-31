@@ -112,3 +112,21 @@ def test_apply_overrides_parses_yaml_and_rejects_typos():
         apply_overrides(cfg, ["loss.taus=1"])
     with pytest.raises(SystemExit):
         apply_overrides(cfg, ["los.tau=1"])
+
+
+def test_aligned_targets_recover_shift_and_exclude_self():
+    from aved.alignment import aligned_loo_targets, shift_edge
+    rng = np.random.default_rng(0)
+    t = np.linspace(0, 1, 58)
+    erp = np.outer(np.ones(4), np.exp(-((t - 0.5) / 0.05) ** 2))         # (C=4, T=58) peaked template
+    true = np.array([-2, 0, 2, 1, -1, 0])
+    X = np.stack([shift_edge(erp, s) for s in true]) + 0.01 * rng.normal(size=(6, 4, 58))
+    group = np.zeros(6, dtype=int)
+    tgt, valid, mean_shift = aligned_loo_targets(X, group, max_shift=3, iters=3)
+    assert valid.all() and mean_shift > 0.5
+    # aligned target is sharper than the plain leave-one-out average
+    plain = (X.sum(0) - X[0]) / 5
+    assert tgt[0].max() > plain.max()
+    # target of trial 0 does not depend on trial 0
+    X2 = X.copy(); X2[0] = rng.normal(size=(4, 58))
+    assert np.allclose(aligned_loo_targets(X2, group, 3, 3)[0][0], tgt[0])
