@@ -1,0 +1,100 @@
+{
+  "method": "red_autoenc_self",
+  "run_name": "red_autoenc_self",
+  "overrides": [],
+  "protocol": "within",
+  "seed": 1,
+  "method_config": {
+    "model": {
+      "F1": 8,
+      "D": 2,
+      "F2": 16,
+      "kern_length": 32,
+      "sep_length": 16,
+      "pool1": 4,
+      "pool2": 8,
+      "spatial_max_norm": 1.0,
+      "dense_max_norm": 0.25
+    },
+    "training": {
+      "dropout": 0.5,
+      "batch_size": 64,
+      "lr": 0.001,
+      "max_epochs": 500,
+      "patience": 50
+    },
+    "teacher": {
+      "k_set": [
+        1
+      ],
+      "draws_per_epoch": 6,
+      "val_k": 1,
+      "max_epochs": 300,
+      "patience": 40,
+      "always_train": true
+    },
+    "loss": {
+      "lambda_n2n": 1.0,
+      "beta_lateral": 1.0,
+      "lambda_critic": 0.5,
+      "lambda_kd": 1.0,
+      "tau": 2.0
+    },
+    "variant": {
+      "n2n": true,
+      "critic": true,
+      "kd_naive": false,
+      "target": "self",
+      "teacher": {
+        "k_set": [
+          1
+        ],
+        "val_k": 1
+      }
+    }
+  },
+  "preprocessing_fingerprint": "e05e4379886f",
+  "preprocessing_config": {
+    "data_dir": "Data",
+    "output_dir": "derivatives/preprocessed",
+    "montage_file": "Data/64-channels.loc",
+    "native_sfreq": 200.0,
+    "n_channels": 21,
+    "filter": {
+      "l_freq": 1.0,
+      "h_freq": 30.0,
+      "l_trans_bandwidth": 1.0,
+      "h_trans_bandwidth": 7.5,
+      "filter_length": "auto",
+      "fir_window": "hamming",
+      "fir_design": "firwin",
+      "phase": "zero"
+    },
+    "bad_channels": {
+      "std_ratio_threshold": 3.0,
+      "max_iterations": 3,
+      "interpolation": "spherical_spline"
+    },
+    "reference": "average",
+    "epoch": {
+      "tmin": 0.05,
+      "tmax": 0.34,
+      "baseline": null
+    },
+    "target_sfreq": 200.0,
+    "artifact": {
+      "ptp_threshold_uv": 100.0
+    }
+  },
+  "git_commit": "acc44665089ea9a6675275dd39c6f339eeda8a74",
+  "device": "cuda",
+  "gpu": "NVIDIA GeForce RTX 3060",
+  "environment": {
+    "python": "3.9.21",
+    "torch": "2.6.0+cu124",
+    "numpy": "1.26.4",
+    "platform": "Windows-10-10.0.26200-SP0"
+  },
+  "max_epochs_override": null,
+  "started": "2026-10-30 09:56:13"
+}

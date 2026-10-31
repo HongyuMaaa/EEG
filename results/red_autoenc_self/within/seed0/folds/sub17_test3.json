@@ -1,0 +1,38 @@
+{
+  "fold": "sub17_test3",
+  "test_session": 3,
+  "val_subjects": [
+    17
+  ],
+  "val_session": 4,
+  "train_sessions": [
+    1,
+    2,
+    5,
+    6
+  ],
+  "accuracy": 0.6083333333333333,
+  "per_subject": {
+    "17": {
+      "accuracy": 0.6083333333333333,
+      "n_test": 480
+    }
+  },
+  "best_epoch": 254,
+  "epochs_run": 304,
+  "val_acc": 0.6520833969116211,
+  "train_time_s": 1599.0,
+  "n_train": 1918,
+  "n_val": 480,
+  "n_test": 480,
+  "teacher_best_epoch": 120,
+  "teacher_train_time_s": 40.7,
+  "teacher_val_acc_avg": 0.6333333849906921,
+  "teacher_test_acc_avg1": 0.6270833611488342,
+  "teacher_test_acc_avg3": 0.6333333849906921,
+  "teacher_test_acc_avg6": 0.7000000476837158,
+  "recon_r2_test": -2.6652,
+  "recon_r2_lateral_test": -3.2512,
+  "device": "cuda",
+  "git_commit": "acc44665089ea9a6675275dd39c6f339eeda8a74"
+}
