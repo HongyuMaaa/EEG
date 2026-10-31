@@ -24,6 +24,12 @@ are not. Two label-free training signals follow:
 - Every method gets the same fixed budget (10 epochs, learning rate 5 × 10⁻⁴), and no target
   labels are used for any choice.
 
+**CPU pre-check** (2 hard subjects, Sub03 and Sub13, source accuracy ≈ 55%):
+- no label-free method helped;
+- `gpl` fell to chance (−5.2 pp), because pseudo-labels from a near-chance source are unreliable;
+- this motivated `gpl_bal` and the per-method check of the predicted class balance;
+- the full 28-subject run decides.
+
 **Methods compared:**
 
 | Method | Type |
@@ -33,6 +39,7 @@ are not. Two label-free training signals follow:
 | Tent | baseline: entropy minimisation |
 | `n2n` | proposed: Noise2Noise reconstruction |
 | `gpl` | proposed: group pseudo-labels |
+| `gpl_bal` | proposed: balanced group pseudo-labels — robust to a shifted decision threshold; within each session the top/bottom 30% of groups by mean prediction get labels 1/0 (each session is balanced 240/240 by design) |
 | `n2n_gpl` | proposed: both |
 | oracle | supervised fine-tuning with the true labels — an upper reference, not a method |
 

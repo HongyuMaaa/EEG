@@ -40,7 +40,8 @@ from aved.models.red import REDStudent  # noqa: E402
 from aved.train import resolve_device, set_seed  # noqa: E402
 from aved.train_red import GroupBank  # noqa: E402
 
-ADAPT_CFG = {"epochs": 10, "lr": 5e-4, "batch_size": 64, "lambda_n2n": 1.0, "gpl_threshold": 0.6}
+ADAPT_CFG = {"epochs": 10, "lr": 5e-4, "batch_size": 64, "lambda_n2n": 1.0, "gpl_threshold": 0.6,
+             "gpl_bal_quantile": 0.3}
 ADAPT_SESSIONS, TEST_SESSIONS = (1, 2, 3), (4, 5, 6)
 
 
@@ -118,27 +119,30 @@ def main():
         te = (ds.subject == s) & np.isin(ds.session, TEST_SESSIONS)
         print(f"Sub{s:02d}: source {tr.sum()} trials, adaptation {ad.sum()} (unlabelled), test {te.sum()}", flush=True)
         source = train_source(X[tr], y[tr], ds.group[tr], X[va], y[va], model_cfg, tcfg, device, args.seed, print)
-        rec = {"subject": s, "seed": args.seed, "adapt_cfg": ADAPT_CFG, "accuracy": {}}
+        rec = {"subject": s, "seed": args.seed, "adapt_cfg": ADAPT_CFG, "accuracy": {}, "pred_rate_class1": {}}
         for m in ADAPT_METHODS:
             model = adapt(source, m, X[ad], ds.group[ad], y[ad] if m == "oracle" else None, ADAPT_CFG, args.seed)
-            acc = float((predict_proba(model, X[te]).argmax(1) == y[te]).float().mean())
-            rec["accuracy"][m] = acc
+            pred = predict_proba(model, X[te]).argmax(1)
+            rec["accuracy"][m] = float((pred == y[te]).float().mean())
+            rec["pred_rate_class1"][m] = float(pred.float().mean())     # 0.5 expected; ~0 or ~1 = collapse
         rec["minutes"] = round((time.time() - t0) / 60, 1)
         print("  " + "  ".join(f"{m} {100 * a:.2f}" for m, a in rec["accuracy"].items()), flush=True)
         f.write_text(json.dumps(rec, indent=2))
 
     rows = [json.loads(p.read_text()) for p in sorted(out_dir.glob("Sub*.json"))]
     acc = pd.DataFrame([r["accuracy"] for r in rows], index=[r["subject"] for r in rows])
+    rate = pd.DataFrame([r.get("pred_rate_class1", {}) for r in rows], index=acc.index)
     lines = [f"# Direction 1 pilot: label-free adaptation to a new subject (seed {args.seed})", "",
              f"Leave-one-subject-out; adaptation on the target's sessions 1-3 without labels; test on sessions 4-6. "
              f"Subjects: {len(acc)}. Adaptation budget: {ADAPT_CFG}.", "",
-             "| method | accuracy (%) | Δ vs source (pp) | Δ vs adabn (pp) | improved vs adabn | Wilcoxon p vs adabn |",
-             "|---|---|---|---|---|---|"]
-    for m in ADAPT_METHODS:
+             "| method | accuracy (%) | Δ vs source (pp) | Δ vs adabn (pp) | improved vs adabn | Wilcoxon p vs adabn "
+             "| mean |P(pred=1) - 0.5| |", "|---|---|---|---|---|---|---|"]
+    for m in [m for m in ADAPT_METHODS if m in acc]:
         d0, d1 = acc[m] - acc["source"], acc[m] - acc["adabn"]
+        balance = f"{(rate[m] - 0.5).abs().mean():.3f}" if m in rate else ""
         p = wilcoxon(acc[m], acc["adabn"]).pvalue if m not in ("source", "adabn") and len(acc) > 5 and (d1 != 0).any() else float("nan")
         lines.append(f"| {m} | {100 * acc[m].mean():.2f} | {100 * d0.mean():+.2f} | {100 * d1.mean():+.2f} "
-                     f"| {int((d1 > 0).sum())}/{len(acc)} | {p:.4f} |")
+                     f"| {int((d1 > 0).sum())}/{len(acc)} | {p:.4f} | {balance} |")
     text = "\n".join(lines) + "\n"
     print(text)
     (out_dir.parent / f"summary_seed{args.seed}.md").write_text(text, encoding="utf-8")

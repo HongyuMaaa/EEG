@@ -13,6 +13,9 @@ Adaptation methods (all start from the same source model, use a fixed budget, ne
   n2n       adabn + Noise2Noise reconstruction on target groups (encoder + decoder; classifier frozen)
   gpl       adabn + group pseudo-labels: label of a group = argmax of its members' mean prediction (refreshed
             every epoch, groups with mean confidence >= 0.6), cross-entropy on members + class-diversity term
+  gpl_bal   like gpl, but robust to a shifted decision threshold: within each adaptation session, groups are
+            ranked by their members' mean P(class 1); the top 30% are labelled 1, the bottom 30% labelled 0, the
+            rest unlabelled (uses the paradigm's design balance - every session has 240/240 trials per class)
   n2n_gpl   n2n and gpl losses together
   oracle    supervised fine-tuning with the TRUE labels of the adaptation trials (upper reference, not a method)
 """
@@ -28,7 +31,7 @@ import torch.nn.functional as F
 
 from .train_red import GroupBank
 
-ADAPT_METHODS = ("source", "adabn", "tent", "n2n", "gpl", "n2n_gpl", "oracle")
+ADAPT_METHODS = ("source", "adabn", "tent", "n2n", "gpl", "gpl_bal", "n2n_gpl", "oracle")
 
 
 @torch.no_grad()
@@ -82,15 +85,31 @@ def adapt(source, method: str, Xa: torch.Tensor, groups: np.ndarray, ya: torch.T
     bank = GroupBank(groups, Xa.device)
     loo, valid = bank.loo_targets(Xa)
     gidx = bank.trial_group
+    # session of each group, from the group id (subject * 100000 + session * 1000 + char_pos * 10 + bit_pos)
+    group_ids = np.unique(groups)
+    group_session = torch.as_tensor((group_ids // 1000) % 100, device=Xa.device)
     gen = torch.Generator().manual_seed(seed)
     bs = cfg["batch_size"]
     for _ in range(cfg["epochs"]):
         pseudo, keep = None, None
-        if method in ("gpl", "n2n_gpl"):
+        if method in ("gpl", "gpl_bal", "n2n_gpl"):
             p = predict_proba(model, Xa)
             gp = torch.zeros(len(bank.counts), 2, device=Xa.device).index_add_(0, gidx, p) / bank.counts[:, None]
-            conf, lab = gp.max(1)
-            pseudo, keep = lab[gidx], (conf >= cfg["gpl_threshold"])[gidx]
+            if method == "gpl_bal":
+                lab = torch.zeros(len(gp), dtype=torch.long, device=Xa.device)
+                gkeep = torch.zeros(len(gp), dtype=torch.bool, device=Xa.device)
+                for sess in torch.unique(group_session):
+                    g = torch.nonzero(group_session == sess).flatten()
+                    order = g[torch.argsort(gp[g, 1])]
+                    q = int(round(cfg["gpl_bal_quantile"] * len(order)))
+                    if q > 0:
+                        lab[order[-q:]] = 1
+                        gkeep[order[:q]] = True
+                        gkeep[order[-q:]] = True
+                pseudo, keep = lab[gidx], gkeep[gidx]
+            else:
+                conf, lab = gp.max(1)
+                pseudo, keep = lab[gidx], (conf >= cfg["gpl_threshold"])[gidx]
         model.eval()    # fixed (adapted) BatchNorm statistics, no dropout
         perm = torch.randperm(len(Xa), generator=gen).to(Xa.device)
         for i in range(0, len(perm), bs):
@@ -106,7 +125,7 @@ def adapt(source, method: str, Xa: torch.Tensor, groups: np.ndarray, ya: torch.T
                 v = valid[b]
                 if v.any():
                     loss = loss + cfg["lambda_n2n"] * F.mse_loss(recon[v], loo[b][v])
-            if method in ("gpl", "n2n_gpl"):
+            if method in ("gpl", "gpl_bal", "n2n_gpl"):
                 k = keep[b]
                 if k.any():
                     loss = loss + F.cross_entropy(logits[k], pseudo[b][k]) + _diversity(p)
