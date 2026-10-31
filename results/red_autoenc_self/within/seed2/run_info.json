@@ -86,7 +86,7 @@
       "ptp_threshold_uv": 100.0
     }
   },
-  "git_commit": "acc44665089ea9a6675275dd39c6f339eeda8a74",
+  "git_commit": "a430b64119ff8fa77324634d8229e4fb783e4769",
   "device": "cuda",
   "gpu": "NVIDIA GeForce RTX 3060",
   "environment": {
@@ -96,5 +96,5 @@
     "platform": "Windows-10-10.0.26200-SP0"
   },
   "max_epochs_override": null,
-  "started": "2026-10-30 09:56:13"
+  "started": "2026-10-31 09:36:32"
 }
