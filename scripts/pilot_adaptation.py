@@ -94,13 +94,14 @@ def main():
     ap.add_argument("--device", default="auto")
     ap.add_argument("--max-epochs", type=int, help="override source max_epochs (smoke tests)")
     ap.add_argument("--results-dir", default="results")
+    ap.add_argument("--name", default="adapt_pilot", help="output folder under results/ (e.g. adapt_pilot_v2)")
     args = ap.parse_args()
     device = resolve_device(args.device)
     model_cfg = yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())["model"]
     tcfg = dict(yaml.safe_load((ROOT / "configs/red.yaml").read_text())["training"]["loso"])
     if args.max_epochs:
         tcfg["max_epochs"] = args.max_epochs
-    out_dir = ROOT / args.results_dir / "adapt_pilot" / f"seed{args.seed}"
+    out_dir = ROOT / args.results_dir / args.name / f"seed{args.seed}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     ds = load_dataset(ROOT / "derivatives/preprocessed", SUBJECTS)

@@ -17,6 +17,10 @@ Adaptation methods (all start from the same source model, use a fixed budget, ne
             ranked by their members' mean P(class 1); the top 30% are labelled 1, the bottom 30% labelled 0, the
             rest unlabelled (uses the paradigm's design balance - every session has 240/240 trials per class)
   n2n_gpl   n2n and gpl losses together
+  balance        control: adabn + shift the classifier bias so that predictions on the adaptation trials are
+                 50/50 (re-centred decision threshold only; no training)
+  gpl_bal_single control: gpl_bal with every trial as its own group (pseudo-labels ranked on single-trial
+                 predictions) - isolates the contribution of repetition averaging
   oracle    supervised fine-tuning with the TRUE labels of the adaptation trials (upper reference, not a method)
 """
 
@@ -31,7 +35,7 @@ import torch.nn.functional as F
 
 from .train_red import GroupBank
 
-ADAPT_METHODS = ("source", "adabn", "tent", "n2n", "gpl", "gpl_bal", "n2n_gpl", "oracle")
+ADAPT_METHODS = ("source", "adabn", "tent", "n2n", "gpl", "gpl_bal", "n2n_gpl", "balance", "gpl_bal_single", "oracle")
 
 
 @torch.no_grad()
@@ -69,6 +73,16 @@ def adapt(source, method: str, Xa: torch.Tensor, groups: np.ndarray, ya: torch.T
     adabn(model, Xa)
     if method == "adabn":
         return model
+    if method == "balance":
+        with torch.no_grad():
+            model.eval()
+            logits = torch.cat([model(Xa[i:i + 2048])[0] for i in range(0, len(Xa), 2048)])
+            model.eegnet.classifier.bias[1] -= (logits[:, 1] - logits[:, 0]).median()
+        return model
+    trial_session = (groups // 1000) % 100   # group id = subject*100000 + session*1000 + char_pos*10 + bit_pos
+    if method == "gpl_bal_single":            # every trial its own group
+        groups = np.arange(len(groups))
+        method = "gpl_bal"
 
     torch.manual_seed(seed)
     if method == "tent":
@@ -85,9 +99,8 @@ def adapt(source, method: str, Xa: torch.Tensor, groups: np.ndarray, ya: torch.T
     bank = GroupBank(groups, Xa.device)
     loo, valid = bank.loo_targets(Xa)
     gidx = bank.trial_group
-    # session of each group, from the group id (subject * 100000 + session * 1000 + char_pos * 10 + bit_pos)
-    group_ids = np.unique(groups)
-    group_session = torch.as_tensor((group_ids // 1000) % 100, device=Xa.device)
+    _, first = np.unique(groups, return_index=True)          # same group order as GroupBank
+    group_session = torch.as_tensor(trial_session[first], device=Xa.device)
     gen = torch.Generator().manual_seed(seed)
     bs = cfg["batch_size"]
     for _ in range(cfg["epochs"]):

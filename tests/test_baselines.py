@@ -130,3 +130,19 @@ def test_aligned_targets_recover_shift_and_exclude_self():
     # target of trial 0 does not depend on trial 0
     X2 = X.copy(); X2[0] = rng.normal(size=(4, 58))
     assert np.allclose(aligned_loo_targets(X2, group, 3, 3)[0][0], tgt[0])
+
+
+def test_adaptation_controls_run_and_balance():
+    from aved.adapt import adapt
+    from aved.models.red import REDStudent
+    torch.manual_seed(0)
+    model = REDStudent(21, 58).eval()
+    X = torch.randn(60, 21, 58)
+    groups = np.repeat(np.array([100000 + 1000 * s + k for s in (1, 2) for k in range(5)]), 6)   # 2 sessions
+    cfg = {"epochs": 1, "lr": 1e-3, "batch_size": 16, "lambda_n2n": 1.0, "gpl_threshold": 0.6, "gpl_bal_quantile": 0.3}
+    bal = adapt(model, "balance", X, groups, None, cfg, 0)
+    with torch.no_grad():
+        logits = bal(X)[0]
+    assert abs((logits.argmax(1) == 1).float().mean().item() - 0.5) <= 0.05
+    for m in ("gpl_bal", "gpl_bal_single"):
+        adapt(model, m, X, groups, None, cfg, 0)
