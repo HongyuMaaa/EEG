@@ -9,6 +9,7 @@ decoding of miniature lateral visual evoked potentials (Xu et al., IEEE TBME 201
 | `docs/algorithm_design.md` | Proposed methods: Chapter 1 (RED distillation), Chapter 2 (LR-MoE) |
 | `docs/preprocessing.md` | Preprocessing pipeline: every parameter and its rationale |
 | `docs/baselines.md` | EEGNet and DCPM baselines, evaluation protocols |
+| `docs/chapter2.md` | Chapter 2 implementation: LR-MoE, RAPL (nested selection, safety rule) |
 | `docs/thesis_plan.md` | **Critical evaluation, scope and work packages of Chapters 1 and 2** |
 | `docs/chapter1_red.md` | Chapter 1 implementation (RED): components, losses, ablation variants |
 | `docs/running_experiments.md` | **How to run the experiments on a local GPU and commit the results** |

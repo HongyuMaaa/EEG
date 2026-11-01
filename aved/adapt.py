@@ -65,8 +65,14 @@ def _diversity(p: torch.Tensor) -> torch.Tensor:
 
 
 def adapt(source, method: str, Xa: torch.Tensor, groups: np.ndarray, ya: torch.Tensor | None, cfg: dict,
-          seed: int):
-    """Return an adapted copy of ``source``. Xa: adaptation trials (normalised); ya only used by 'oracle'."""
+          seed: int, info: dict | None = None):
+    """Return an adapted copy of ``source``. Xa: adaptation trials (normalised); ya only used by 'oracle'.
+
+    cfg["gpl_bal_quantile_end"] (optional) grows the labelled fraction linearly from gpl_bal_quantile in the first
+    epoch to this value in the last. If ``info`` is a dict, label-free diagnostics of the pseudo-labelling are
+    stored in it: pl_stability (fraction of groups labelled in the first epoch whose label is unchanged and still
+    selected in the last epoch).
+    """
     model = copy.deepcopy(source)
     if method == "source":
         return model
@@ -103,7 +109,8 @@ def adapt(source, method: str, Xa: torch.Tensor, groups: np.ndarray, ya: torch.T
     group_session = torch.as_tensor(trial_session[first], device=Xa.device)
     gen = torch.Generator().manual_seed(seed)
     bs = cfg["batch_size"]
-    for _ in range(cfg["epochs"]):
+    first_labels = None
+    for ep in range(cfg["epochs"]):
         pseudo, keep = None, None
         if method in ("gpl", "gpl_bal", "n2n_gpl"):
             p = predict_proba(model, Xa)
@@ -114,12 +121,18 @@ def adapt(source, method: str, Xa: torch.Tensor, groups: np.ndarray, ya: torch.T
                 for sess in torch.unique(group_session):
                     g = torch.nonzero(group_session == sess).flatten()
                     order = g[torch.argsort(gp[g, 1])]
-                    q = int(round(cfg["gpl_bal_quantile"] * len(order)))
+                    q0 = cfg["gpl_bal_quantile"]
+                    q1 = cfg.get("gpl_bal_quantile_end", q0)
+                    frac = q0 + (q1 - q0) * ep / max(cfg["epochs"] - 1, 1)
+                    q = min(int(round(frac * len(order))), len(order) // 2)
                     if q > 0:
                         lab[order[-q:]] = 1
                         gkeep[order[:q]] = True
                         gkeep[order[-q:]] = True
                 pseudo, keep = lab[gidx], gkeep[gidx]
+                if first_labels is None:
+                    first_labels = (lab.clone(), gkeep.clone())
+                last_labels = (lab, gkeep)
             else:
                 conf, lab = gp.max(1)
                 pseudo, keep = lab[gidx], (conf >= cfg["gpl_threshold"])[gidx]
@@ -148,4 +161,7 @@ def adapt(source, method: str, Xa: torch.Tensor, groups: np.ndarray, ya: torch.T
                 opt.step()
                 model.apply_max_norm()
     model.eval()
+    if info is not None and first_labels is not None:
+        (l0, k0), (l1, k1) = first_labels, last_labels
+        info["pl_stability"] = float(((l0 == l1) & k1)[k0].float().mean()) if k0.any() else float("nan")
     return model

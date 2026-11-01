@@ -146,3 +146,26 @@ def test_adaptation_controls_run_and_balance():
     assert abs((logits.argmax(1) == 1).float().mean().item() - 0.5) <= 0.05
     for m in ("gpl_bal", "gpl_bal_single"):
         adapt(model, m, X, groups, None, cfg, 0)
+
+
+CH21 = ['P7', 'P5', 'P3', 'P1', 'PZ', 'P2', 'P4', 'P6', 'P8', 'PO7', 'PO5', 'PO3', 'POZ', 'PO4', 'PO6', 'PO8',
+        'CB1', 'O1', 'OZ', 'O2', 'CB2']
+
+
+def test_lrmoe_mirror_equivariance_and_invariant_routing():
+    from aved.models.lrmoe import LRMoE, VARIANTS, mirror_index
+    torch.manual_seed(0)
+    m = mirror_index(CH21)
+    assert sorted(m) == list(range(21)) and all(m[m[i]] == i for i in range(21))
+    assert m[CH21.index('POZ')] == CH21.index('POZ') and m[CH21.index('PO7')] == CH21.index('PO8')
+    x = torch.randn(8, 21, 58)
+    xm = x[:, m]
+    anti = LRMoE(CH21, 58, 200.0, [("anti", d) for d in (-4, 0, 4)], "physio").eval()
+    lo, g = anti(x)
+    lo_m, g_m = anti(xm)
+    assert torch.allclose(lo_m, -lo, atol=1e-5)              # mirrored trial -> opposite decision
+    assert torch.allclose(g_m, g, atol=1e-5)                 # physiological routing is mirror-invariant
+    for name, v in VARIANTS.items():
+        model = LRMoE(CH21, 58, 200.0, v["experts"], v["router"]).eval()
+        out, gates = model(x)
+        assert out.shape == (8, 2) and gates.shape == (8, len(v["experts"]))
