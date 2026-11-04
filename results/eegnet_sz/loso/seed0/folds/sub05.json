@@ -1,0 +1,24 @@
+{
+  "fold": "sub05",
+  "test_session": null,
+  "val_subjects": [
+    6,
+    7,
+    8
+  ],
+  "accuracy": 0.5451388888888888,
+  "per_subject": {
+    "5": {
+      "accuracy": 0.5451388888888888,
+      "n_test": 2880
+    }
+  },
+  "mean_gate": [
+    1.0
+  ],
+  "expert_kinds": [
+    "full+0"
+  ],
+  "best_epoch": 12,
+  "train_time_s": 137.5
+}

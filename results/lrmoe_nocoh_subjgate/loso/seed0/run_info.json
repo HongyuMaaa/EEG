@@ -1,0 +1,62 @@
+{
+  "method": "lrmoe_nocoh",
+  "variant": {
+    "experts": [
+      [
+        "anti",
+        -4
+      ],
+      [
+        "anti",
+        0
+      ],
+      [
+        "anti",
+        4
+      ],
+      [
+        "sym",
+        -4
+      ],
+      [
+        "sym",
+        0
+      ],
+      [
+        "sym",
+        4
+      ],
+      [
+        "full",
+        0
+      ]
+    ],
+    "router": "physio",
+    "lambda_coh": 0.0
+  },
+  "loss": {
+    "lambda_lb": 0.1,
+    "lambda_coh": 0.1
+  },
+  "training": {
+    "dropout": 0.25,
+    "batch_size": 256,
+    "lr": 0.001,
+    "max_epochs": 150,
+    "patience": 20
+  },
+  "model": {
+    "F1": 8,
+    "D": 2,
+    "F2": 16,
+    "kern_length": 32,
+    "sep_length": 16,
+    "pool1": 4,
+    "pool2": 8,
+    "spatial_max_norm": 1.0,
+    "dense_max_norm": 0.25
+  },
+  "seed": 0,
+  "device": "cuda",
+  "normalisation": "per-subject z-score"
+}
