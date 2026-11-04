@@ -94,3 +94,40 @@ f is a small EEGNet.
 
 `scripts/char_level.py` → `reports/char_level.md`: character accuracy and ITR versus the number
 of repetitions, from the stored single-trial predictions.
+
+## C2.1 feasibility gate — oracle phenotype routing (round 5)
+
+**Motivation:** `reports/round4_analysis.md`. Trial-level routing collapsed to a uniform
+ensemble.
+
+**Question:** does routing per *subject*, with the subject's **true** phenotype, beat one
+model trained on everyone? If not, the MoE direction is closed.
+
+**Code:**
+- descriptors: `aved/phenotype.py`;
+- runner: `scripts/run_oracle_routing.py`;
+- job queue: `scripts/round5.ps1`.
+
+**Descriptors** (from labelled class averages): mirror correlation, lateralisation peak
+latency, log ratio of antisymmetric to symmetric class-difference energy.
+- Strong lateralisers (Sub02, 12, 15, 18, 21; mirror_corr 0.65–0.86) are easy within-subject
+  (73–93%) but poorly served by the pooled LOSO model (49–61%).
+- They are also the subjects RAPL helps most.
+
+**Variants** (same EEGNet, settings and global normalisation as the LOSO baseline; 2 training
+subjects held out for early stopping):
+
+| Variant | Training subjects | Control for |
+|---|---|---|
+| `phen_split` | own half of a median split on mirror_corr | — |
+| `rand_split` | random subjects, same number | less data |
+| `wrong_split` | opposite phenotype half | direction of routing |
+| `phen_knn` | 13 nearest subjects in descriptor space | — |
+| `rand_knn` | 13 random subjects | less data |
+| `phen_cond` | all 27; read-out modulated by the descriptors (W0 f + Σ d_j W_j f) | — |
+
+**Decision rule:**
+- **Routing is worth pursuing (label-free, with descriptors estimated from RAPL
+  pseudo-labels)** if `phen_split` > `rand_split` and > `wrong_split`, or `phen_knn` >
+  `rand_knn`, **and** a phenotype variant ≥ the full-data EEGNet baseline.
+- **Otherwise** the MoE direction is closed as a documented negative result.

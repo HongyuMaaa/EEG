@@ -169,3 +169,21 @@ def test_lrmoe_mirror_equivariance_and_invariant_routing():
         model = LRMoE(CH21, 58, 200.0, v["experts"], v["router"]).eval()
         out, gates = model(x)
         assert out.shape == (8, 2) and gates.shape == (8, len(v["experts"]))
+
+
+def test_oracle_routing_subject_selection():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import pandas as pd
+    from run_oracle_routing import K_NEIGHBOURS, choose_subjects
+    rng = np.random.default_rng(0)
+    desc = pd.DataFrame({"mirror_corr": np.linspace(-0.5, 0.9, 28), "lat_latency": rng.uniform(0.15, 0.3, 28),
+                         "anti_ratio": rng.normal(1.5, 0.5, 28)}, index=range(1, 29))
+    own = choose_subjects("phen_split", 28, desc, rng)            # subject 28 has the highest mirror_corr
+    wrong = choose_subjects("wrong_split", 28, desc, rng)
+    assert 28 not in own and set(own).isdisjoint(wrong) and len(own) + len(wrong) == 27
+    assert min(desc.mirror_corr[own]) > max(desc.mirror_corr[wrong])
+    rand = choose_subjects("rand_split", 28, desc, np.random.default_rng(1))
+    assert len(rand) == len(own) and 28 not in rand
+    knn = choose_subjects("phen_knn", 5, desc, rng)
+    assert len(knn) == K_NEIGHBOURS and 5 not in knn
+    assert len(choose_subjects("phen_cond", 5, desc, rng)) == 27
