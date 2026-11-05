@@ -1,0 +1,29 @@
+{
+  "fold": "sub05",
+  "test_session": null,
+  "accuracy": 0.5423611111111111,
+  "per_subject": {
+    "5": {
+      "accuracy": 0.5423611111111111,
+      "n_test": 2880
+    }
+  },
+  "train_subjects": [
+    3,
+    4,
+    8,
+    13,
+    14,
+    17,
+    20,
+    23,
+    25,
+    27,
+    28
+  ],
+  "val_subjects": [
+    9,
+    24
+  ],
+  "best_epoch": 15
+}

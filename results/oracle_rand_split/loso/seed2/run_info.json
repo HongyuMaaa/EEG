@@ -1,0 +1,12 @@
+{
+  "variant": "rand_split",
+  "training": {
+    "dropout": 0.25,
+    "batch_size": 256,
+    "lr": 0.001,
+    "max_epochs": 150,
+    "patience": 20
+  },
+  "seed": 2,
+  "device": "cuda"
+}
