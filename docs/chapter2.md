@@ -152,3 +152,30 @@ the same descriptors, 13 random subjects.
 **Diagnostics stored per fold:** estimated vs true descriptors, neighbour overlap, and
 pseudo-label accuracy. The pseudo-label accuracy is computed with labels for reporting only and
 is never used.
+
+## Round 7 — repetition-consistency routing (RCR) over subject-bagged experts
+
+Motivation: `reports/round6_analysis.md`. Descriptor-based routing is not label-free; selecting
+models by repetition consistency was a positive pilot.
+
+**Code:** `scripts/run_rcr.py`, job queue `scripts/round7.ps1`.
+
+**Per target:**
+1. **Expert pool:** the full-data EEGNet + 8 EEGNets on random 13-subject subsets.
+2. **Router score:** `cons` = agreement of an expert's single-trial predictions on the unlabelled
+   sessions 1–3 with its own balanced repetition-group pseudo-labels.
+3. **Routing rules,** fixed before any result:
+
+   | Rule | Definition |
+   |---|---|
+   | `rcr_top1` | the expert with the highest `cons` |
+   | `rcr_top3` | mean probability of the 3 highest |
+   | `rcr_soft` | weights softmax(`cons` / 0.02) over all experts |
+
+4. **RAPL (q30_e20) on top:** `rcr_full_rapl`, `rcr_top1_rapl`, `rcr_top3_rapl`.
+
+**Controls:** `rcr_full`, `rcr_uniform` (equal average of all experts), `rcr_random`, and
+`rcr_oracle` (best expert on the test sessions; reference only).
+
+**Testing:** sessions 4–6, 3 seeds. Per-subject expert scores are stored in
+`results/rcr_experts/`.

@@ -187,3 +187,16 @@ def test_oracle_routing_subject_selection():
     knn = choose_subjects("phen_knn", 5, desc, rng)
     assert len(knn) == K_NEIGHBOURS and 5 not in knn
     assert len(choose_subjects("phen_cond", 5, desc, rng)) == 27
+
+
+def test_rcr_consistency_rewards_repetition_agreement():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from run_rcr import consistency
+    groups = np.repeat(np.arange(10), 6)                   # 10 groups of 6 repetitions, one session
+    sessions = np.ones(60, dtype=int)
+    lab = np.repeat([0, 1] * 5, 6)
+    consistent = np.where(lab == 1, 0.8, 0.2)              # every repetition agrees with its group
+    assert consistency(consistent, groups, sessions) == 1.0
+    rng = np.random.default_rng(0)
+    noisy = rng.uniform(0, 1, 60)                          # unrelated to the group structure
+    assert consistency(noisy, groups, sessions) < 0.8
