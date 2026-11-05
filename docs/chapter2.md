@@ -131,3 +131,24 @@ subjects held out for early stopping):
   pseudo-labels)** if `phen_split` > `rand_split` and > `wrong_split`, or `phen_knn` >
   `rand_knn`, **and** a phenotype variant ≥ the full-data EEGNet baseline.
 - **Otherwise** the MoE direction is closed as a documented negative result.
+
+## Round 6 — label-free phenotype routing (+ RAPL)
+
+The oracle gate passed (`reports/round5_analysis.md`): the 13 nearest-phenotype subjects beat both
+13 random subjects and all 27 subjects.
+
+**Label-free version:** `scripts/run_est_routing.py`, job queue `scripts/round6.ps1`.
+
+**Per target:**
+1. full-data source model;
+2. balanced repetition-group pseudo-labels on sessions 1–3;
+3. estimate of mirror_corr and anti_ratio;
+4. EEGNet on the 13 subjects nearest to the estimate;
+5. optionally RAPL on top.
+
+**References, same run, test on sessions 4–6:** full-data model (± RAPL), oracle routing with
+the same descriptors, 13 random subjects.
+
+**Diagnostics stored per fold:** estimated vs true descriptors, neighbour overlap, and
+pseudo-label accuracy. The pseudo-label accuracy is computed with labels for reporting only and
+is never used.

@@ -69,6 +69,17 @@ class CondEEGNet(nn.Module):
         self.eegnet.apply_max_norm()
 
 
+def knn_subjects(s, desc, cols=DESCRIPTORS, k=K_NEIGHBOURS, target_desc=None):
+    """The k subjects nearest to s in standardised descriptor space (standardised over the other subjects).
+    ``target_desc`` replaces the descriptors of s (e.g. a label-free estimate)."""
+    others = [o for o in SUBJECTS if o != s]
+    d = desc[list(cols)].copy()
+    if target_desc is not None:
+        d.loc[s, list(cols)] = [target_desc[c] for c in cols]
+    z = (d - d.loc[others].mean()) / d.loc[others].std()
+    return ((z.loc[others] - z.loc[s]) ** 2).sum(axis=1).nsmallest(k).index.tolist()
+
+
 def choose_subjects(variant, s, desc, rng):
     """Training subjects (incl. validation) for test subject s."""
     others = [o for o in SUBJECTS if o != s]
@@ -86,29 +97,23 @@ def choose_subjects(variant, s, desc, rng):
     if variant in ("phen_knn", "rand_knn"):
         if variant == "rand_knn":
             return sorted(rng.choice(others, size=K_NEIGHBOURS, replace=False).tolist())
-        z = (desc - desc.loc[others].mean()) / desc.loc[others].std()
-        dist = ((z.loc[others] - z.loc[s]) ** 2).sum(1)
-        return dist.nsmallest(K_NEIGHBOURS).index.tolist()
+        return knn_subjects(s, desc)
     return others                                       # phen_cond
 
 
-def run_fold(variant, s, ds, desc, tcfg, model_cfg, device, seed, log):
-    rng = np.random.default_rng(1000 * seed + s)
-    pool = choose_subjects(variant, s, desc, rng)
-    val = sorted(rng.choice(pool, size=N_VAL, replace=False).tolist())
-    train = [o for o in pool if o not in val]
-    tr, va, te = (np.isin(ds.subject, g) for g in (train, val, [s]))
+def fit_eegnet(ds, train, val, tcfg, model_cfg, device, seed, D=None, n_cond=0):
+    """Train (Cond)EEGNet on subjects ``train``, early-stopped on ``val``; global channel normalisation from the
+    training subjects. Returns the model (eval mode) and the normalised data tensor X of all trials."""
+    tr, va = np.isin(ds.subject, train), np.isin(ds.subject, val)
     mean, std = ds.X[tr].mean(axis=(0, 2)), ds.X[tr].std(axis=(0, 2))
     X = torch.from_numpy((ds.X - mean[:, None]) / std[:, None]).float().to(device)
     y = torch.from_numpy(ds.y).to(device)
-    z = ((desc - desc.loc[[o for o in SUBJECTS if o != s]].mean()) / desc.loc[[o for o in SUBJECTS if o != s]].std())
-    D = torch.from_numpy(z.loc[ds.subject, list(DESCRIPTORS)].to_numpy(np.float32)).to(device)
-
+    if D is None:
+        D = torch.zeros(len(ds.y), max(n_cond, 1), device=device)
     set_seed(seed)
-    model = CondEEGNet(X.shape[1], X.shape[2], len(DESCRIPTORS) if variant == "phen_cond" else 0,
-                       dropout=tcfg["dropout"], **model_cfg).to(device)
+    model = CondEEGNet(X.shape[1], X.shape[2], n_cond, dropout=tcfg["dropout"], **model_cfg).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=tcfg["lr"])
-    itr, iva, ite = (torch.as_tensor(np.flatnonzero(m), device=device) for m in (tr, va, te))
+    itr, iva = (torch.as_tensor(np.flatnonzero(m), device=device) for m in (tr, va))
     gen = torch.Generator().manual_seed(seed)
     best = {"loss": np.inf, "epoch": 0, "state": copy.deepcopy(model.state_dict())}
     for epoch in range(1, tcfg["max_epochs"] + 1):
@@ -132,12 +137,32 @@ def run_fold(variant, s, ds, desc, tcfg, model_cfg, device, seed, log):
         if epoch - best["epoch"] >= tcfg["patience"]:
             break
     model.load_state_dict(best["state"])
-    model.eval()
-    with torch.no_grad():
-        prob = torch.cat([torch.softmax(model(X[ite][i:i + 2048], D[ite][i:i + 2048]), 1)[:, 1]
-                          for i in range(0, len(ite), 2048)]).cpu().numpy()
-    log(f"  {variant} Sub{s:02d}: {len(train)} train + {len(val)} val subjects, best epoch {best['epoch']}")
-    return te, prob, {"train_subjects": train, "val_subjects": val, "best_epoch": best["epoch"]}
+    model.best_epoch = best["epoch"]
+    return model.eval(), X
+
+
+@torch.no_grad()
+def predict_prob(model, X, D=None):
+    D = torch.zeros(len(X), max(model.n_cond, 1), device=X.device) if D is None else D
+    return torch.cat([torch.softmax(model(X[i:i + 2048], D[i:i + 2048]), 1)[:, 1]
+                      for i in range(0, len(X), 2048)]).cpu().numpy()
+
+
+def run_fold(variant, s, ds, desc, tcfg, model_cfg, device, seed, log):
+    rng = np.random.default_rng(1000 * seed + s)
+    pool = choose_subjects(variant, s, desc, rng)
+    val = sorted(rng.choice(pool, size=N_VAL, replace=False).tolist())
+    train = [o for o in pool if o not in val]
+    others = [o for o in SUBJECTS if o != s]
+    z = (desc - desc.loc[others].mean()) / desc.loc[others].std()
+    D = torch.from_numpy(z.loc[ds.subject, list(DESCRIPTORS)].to_numpy(np.float32)).to(device)
+    n_cond = len(DESCRIPTORS) if variant == "phen_cond" else 0
+    model, X = fit_eegnet(ds, train, val, tcfg, model_cfg, device, seed, D if n_cond else None, n_cond)
+    te = ds.subject == s
+    ite = torch.as_tensor(np.flatnonzero(te), device=device)
+    prob = predict_prob(model, X[ite], D[ite] if n_cond else None)
+    log(f"  {variant} Sub{s:02d}: {len(train)} train + {len(val)} val subjects, best epoch {model.best_epoch}")
+    return te, prob, {"train_subjects": train, "val_subjects": val, "best_epoch": model.best_epoch}
 
 
 def main():
