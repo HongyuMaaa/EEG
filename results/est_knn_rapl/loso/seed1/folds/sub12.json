@@ -1,0 +1,51 @@
+{
+  "fold": "sub12",
+  "test_session": null,
+  "accuracy": 0.7194444444444444,
+  "per_subject": {
+    "12": {
+      "accuracy": 0.7194444444444444,
+      "n_test": 1440
+    }
+  },
+  "estimated": {
+    "mirror_corr": 0.5252231848408389,
+    "anti_ratio": 1.4907896518707275
+  },
+  "true": {
+    "mirror_corr": 0.8098654412033259,
+    "anti_ratio": 1.8689055442810059
+  },
+  "neighbours_est": [
+    16,
+    15,
+    27,
+    26,
+    7,
+    21,
+    25,
+    23,
+    28,
+    3,
+    19,
+    1,
+    10
+  ],
+  "neighbours_true": [
+    19,
+    21,
+    15,
+    10,
+    16,
+    11,
+    7,
+    22,
+    6,
+    27,
+    1,
+    26,
+    23
+  ],
+  "neighbour_overlap": 0.7692307692307693,
+  "pseudo_label_accuracy": 0.675
+}
