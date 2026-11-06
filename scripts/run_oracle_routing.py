@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT))
 from aved.data import SUBJECTS, load_dataset  # noqa: E402
 from aved.models.eegnet import EEGNet  # noqa: E402
 from aved.phenotype import DESCRIPTORS, descriptor_table  # noqa: E402
-from aved.train import resolve_device, set_seed  # noqa: E402
+from aved.train import resolve_device, set_seed, limit_gpu_memory, VRAM_HELP  # noqa: E402
 
 VARIANTS = ("phen_split", "rand_split", "wrong_split", "phen_knn", "rand_knn", "phen_cond")
 K_NEIGHBOURS = 13
@@ -171,10 +171,12 @@ def main():
     ap.add_argument("--subjects", type=int, nargs="*", default=list(SUBJECTS))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--max-vram-gb", type=float, help=VRAM_HELP)
     ap.add_argument("--max-epochs", type=int)
     ap.add_argument("--results-dir", default="results")
     args = ap.parse_args()
     device = resolve_device(args.device)
+    limit_gpu_memory(device, args.max_vram_gb)
     cfg = yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())
     tcfg = dict(cfg["training"]["loso"])
     if args.max_epochs:

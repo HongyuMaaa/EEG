@@ -37,7 +37,7 @@ sys.path.insert(0, str(ROOT))
 from aved.adapt import ADAPT_METHODS, adapt, predict_proba  # noqa: E402
 from aved.data import SUBJECTS, load_dataset, make_folds  # noqa: E402
 from aved.models.red import REDStudent  # noqa: E402
-from aved.train import resolve_device, set_seed  # noqa: E402
+from aved.train import resolve_device, set_seed, limit_gpu_memory, VRAM_HELP  # noqa: E402
 from aved.train_red import GroupBank  # noqa: E402
 
 ADAPT_CFG = {"epochs": 10, "lr": 5e-4, "batch_size": 64, "lambda_n2n": 1.0, "gpl_threshold": 0.6,
@@ -92,11 +92,13 @@ def main():
     ap.add_argument("--subjects", type=int, nargs="*", default=list(SUBJECTS))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--max-vram-gb", type=float, help=VRAM_HELP)
     ap.add_argument("--max-epochs", type=int, help="override source max_epochs (smoke tests)")
     ap.add_argument("--results-dir", default="results")
     ap.add_argument("--name", default="adapt_pilot", help="output folder under results/ (e.g. adapt_pilot_v2)")
     args = ap.parse_args()
     device = resolve_device(args.device)
+    limit_gpu_memory(device, args.max_vram_gb)
     model_cfg = yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())["model"]
     tcfg = dict(yaml.safe_load((ROOT / "configs/red.yaml").read_text())["training"]["loso"])
     if args.max_epochs:

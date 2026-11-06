@@ -38,7 +38,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 from aved.data import SUBJECTS, load_dataset, make_folds  # noqa: E402
 from aved.models.lrmoe import VARIANTS, LRMoE  # noqa: E402
-from aved.train import resolve_device, set_seed  # noqa: E402
+from aved.train import resolve_device, set_seed, limit_gpu_memory, VRAM_HELP  # noqa: E402
 
 LOSS = {"lambda_lb": 0.1, "lambda_coh": 0.1}
 
@@ -130,10 +130,12 @@ def main():
     ap.add_argument("--subjects", type=int, nargs="*", default=list(SUBJECTS))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--max-vram-gb", type=float, help=VRAM_HELP)
     ap.add_argument("--max-epochs", type=int)
     ap.add_argument("--results-dir", default="results")
     args = ap.parse_args()
     device = resolve_device(args.device)
+    limit_gpu_memory(device, args.max_vram_gb)
     tcfg = dict(yaml.safe_load((ROOT / "configs/red.yaml").read_text())["training"]["loso"])
     if args.max_epochs:
         tcfg["max_epochs"] = args.max_epochs

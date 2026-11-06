@@ -38,7 +38,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 from aved.adapt import adapt  # noqa: E402
 from aved.data import SUBJECTS, load_dataset  # noqa: E402
-from aved.train import resolve_device  # noqa: E402
+from aved.train import resolve_device, limit_gpu_memory, VRAM_HELP  # noqa: E402
 from pilot_adaptation import ADAPT_CFG  # noqa: E402
 from run_est_routing import RAPL, AdaptView, pseudo_labels, save  # noqa: E402
 from run_oracle_routing import K_NEIGHBOURS, N_VAL, fit_eegnet, predict_prob  # noqa: E402
@@ -60,11 +60,13 @@ def main():
     ap.add_argument("--subjects", type=int, nargs="*", default=list(SUBJECTS))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--max-vram-gb", type=float, help=VRAM_HELP)
     ap.add_argument("--max-epochs", type=int)
     ap.add_argument("--n-bagged", type=int, default=N_BAGGED)
     ap.add_argument("--results-dir", default="results")
     args = ap.parse_args()
     device = resolve_device(args.device)
+    limit_gpu_memory(device, args.max_vram_gb)
     cfg = yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())
     tcfg = dict(cfg["training"]["loso"])
     if args.max_epochs:
@@ -91,8 +93,12 @@ def main():
             val = sorted(rng.choice(pool, size=N_VAL, replace=False).tolist())
             model, X = fit_eegnet(ds, [o for o in pool if o not in val], val, tcfg, cfg["model"], device,
                                   args.seed + 100 * j)
-            p13, p46 = predict_prob(model, X[ie]), predict_prob(model, X[it])
-            experts.append({"model": model, "X": X, "p46": p46, "pool": pool,
+            Xe, Xt = X[ie].clone(), X[it].clone()     # keep only the target's trials (each expert normalises
+            del X                                      # differently); the full ~0.4 GB copy is freed at once
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+            p13, p46 = predict_prob(model, Xe), predict_prob(model, Xt)
+            experts.append({"model": model, "Xe": Xe, "Xt": Xt, "p46": p46, "pool": pool,
                             "cons": consistency(p13, ds.group[est_m], ds.session[est_m]),
                             "acc46": float(((p46 > 0.5) == y_te).mean())})
         cons = np.array([e["cons"] for e in experts])
@@ -101,11 +107,11 @@ def main():
         w /= w.sum()
 
         def rapl(e):
-            m = adapt(AdaptView(e["model"]), RAPL[0], e["X"][ie], ds.group[est_m], None, {**ADAPT_CFG, **RAPL[1]},
+            m = adapt(AdaptView(e["model"]), RAPL[0], e["Xe"], ds.group[est_m], None, {**ADAPT_CFG, **RAPL[1]},
                       args.seed)
             with torch.no_grad():
-                return torch.cat([torch.softmax(m(e["X"][it][i:i + 2048])[0], 1)[:, 1]
-                                  for i in range(0, len(it), 2048)]).cpu().numpy()
+                return torch.cat([torch.softmax(m(e["Xt"][i:i + 2048])[0], 1)[:, 1]
+                                  for i in range(0, len(e["Xt"]), 2048)]).cpu().numpy()
 
         P = np.stack([e["p46"] for e in experts])
         probs = {

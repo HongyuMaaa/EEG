@@ -45,7 +45,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 from aved.adapt import adapt, predict_proba  # noqa: E402
 from aved.data import SUBJECTS, load_dataset, make_folds  # noqa: E402
-from aved.train import resolve_device  # noqa: E402
+from aved.train import resolve_device, limit_gpu_memory, VRAM_HELP  # noqa: E402
 from aved.train_red import GroupBank  # noqa: E402
 from pilot_adaptation import ADAPT_CFG, ADAPT_SESSIONS, TEST_SESSIONS, train_source, zscore_per_subject  # noqa: E402
 
@@ -175,6 +175,7 @@ def main():
     ap.add_argument("--subjects", type=int, nargs="*", default=list(SUBJECTS))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--max-vram-gb", type=float, help=VRAM_HELP)
     ap.add_argument("--max-epochs", type=int, help="override source max_epochs (smoke tests)")
     ap.add_argument("--results-dir", default="results")
     ap.add_argument("--summary-only", action="store_true")
@@ -183,6 +184,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     if not args.summary_only:
         device = resolve_device(args.device)
+        limit_gpu_memory(device, args.max_vram_gb)
         model_cfg = yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())["model"]
         tcfg = dict(yaml.safe_load((ROOT / "configs/red.yaml").read_text())["training"]["loso"])
         if args.max_epochs:

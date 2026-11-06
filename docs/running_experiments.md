@@ -422,3 +422,19 @@ model = ckpt["model"]  # EEGNet in eval mode; normalise inputs with ckpt["channe
 | CUDA out of memory | Unlikely (EEGNet needs < 1 GB). Close other GPU programs, or reduce `batch_size` in `configs/eegnet.yaml`. |
 | PowerShell refuses `Activate.ps1` | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once |
 | Results differ slightly between GPU and CPU or between machines | Expected for EEGNet (floating-point nondeterminism). Differences should be well under 1 percentage point on average. |
+
+## 7. Limiting GPU memory and keeping the computer responsive
+
+- **Per process:** every GPU script accepts `--max-vram-gb N`, a hard cap on PyTorch's GPU memory
+  for that process (`torch.cuda.set_per_process_memory_fraction`).
+  - The CUDA context adds about 0.3–0.5 GB on top.
+  - A run that would need more stops with an out-of-memory error instead of slowing the system
+    down.
+  - `run_sweep.py` and `run_all_baselines.py` forward the option to every run they start.
+- **Whole round:** `.\scripts\round7.ps1 -MaxVramGB 4 -MaxParallel 3` gives each of the 3
+  parallel jobs (4 / 3) − 0.5 ≈ 0.83 GB. The queue also starts its jobs at below-normal CPU
+  priority.
+- **How much is needed:** about 1 GB per job is enough for these models; the full dataset on the
+  GPU is ~0.4 GB.
+- **If the desktop still stutters,** lower `-MaxParallel`. GPU *compute* contention is not
+  limited by a memory cap.

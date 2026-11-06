@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--max-vram-gb", type=float, help="forwarded to every run: GPU memory cap per process in GB")
     ap.add_argument("--seeds", type=int, nargs="+", default=[0])
     ap.add_argument("--methods", nargs="+", default=["dcpm", "dcpm_plain", "eegnet"])
     ap.add_argument("--protocols", nargs="+", default=["within", "pooled", "loso"])
@@ -35,6 +36,8 @@ def main() -> None:
             for protocol in args.protocols:
                 cmd = [sys.executable, "-u", str(ROOT / "scripts/run_baseline.py"), "--method", method,
                        "--protocol", protocol, "--seed", str(seed), "--device", args.device]
+                if args.max_vram_gb:
+                    cmd += ["--max-vram-gb", str(args.max_vram_gb)]
                 log = ROOT / "logs" / f"{method}_{protocol}_seed{seed}.log"
                 print(f"\n=== {method} / {protocol} / seed {seed}  (log: {log.relative_to(ROOT)})", flush=True)
                 t0 = time.time()

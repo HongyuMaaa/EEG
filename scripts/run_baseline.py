@@ -41,7 +41,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from aved.config import load_config  # noqa: E402
 from aved.data import PROTOCOLS, SESSIONS, SUBJECTS, fold_subjects, load_dataset, make_folds  # noqa: E402
-from aved.train import resolve_device, train_dcpm, train_eegnet  # noqa: E402
+from aved.train import resolve_device, train_dcpm, train_eegnet, limit_gpu_memory, VRAM_HELP  # noqa: E402
 from aved.train_red import train_red  # noqa: E402
 
 RED_METHODS = tuple(yaml.safe_load((ROOT / "configs/red.yaml").read_text())["variants"])
@@ -88,6 +88,7 @@ def main() -> None:
                     help="test sessions to run (within, pooled)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="auto", help="auto | cpu | cuda | cuda:0 ... (EEGNet only)")
+    ap.add_argument("--max-vram-gb", type=float, help=VRAM_HELP)
     ap.add_argument("--max-epochs", type=int, help="override max_epochs (smoke tests)")
     ap.add_argument("--preprocess-config", default="configs/preprocess.yaml")
     ap.add_argument("--results-dir", default="results")
@@ -150,6 +151,7 @@ def main() -> None:
         apply_overrides(method_cfg, args.set)
         device = torch.device("cpu")
 
+    limit_gpu_memory(device, args.max_vram_gb)
     run_dir = ROOT / args.results_dir / run_name / args.protocol / f"seed{args.seed}"
     ckpt_dir = ROOT / args.checkpoint_dir / run_name / args.protocol / f"seed{args.seed}"
     for d in (run_dir / "folds", run_dir / "predictions", run_dir / "history", ckpt_dir):

@@ -141,3 +141,17 @@ def load_checkpoint(path) -> dict:
         model.load_state_dict(ckpt["state_dict"])
         ckpt["model"] = model.eval()
     return ckpt
+
+
+VRAM_HELP = ("cap on this process's GPU memory in GB (PyTorch allocations; the CUDA context adds ~0.3-0.5 GB on "
+             "top). Exceeding it raises an out-of-memory error instead of slowing the computer down.")
+
+
+def limit_gpu_memory(device: torch.device, max_gb: float | None) -> None:
+    """Cap the PyTorch caching allocator of this process at ``max_gb`` GB on ``device`` (no-op on CPU / None)."""
+    if max_gb is None or device.type != "cuda":
+        return
+    total_gb = torch.cuda.get_device_properties(device).total_memory / 1024 ** 3
+    fraction = min(max(max_gb / total_gb, 0.01), 1.0)
+    torch.cuda.set_per_process_memory_fraction(fraction, device)
+    print(f"GPU memory limit: {max_gb:.2f} GB of {total_gb:.1f} GB ({100 * fraction:.0f}%)", flush=True)

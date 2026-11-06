@@ -14,13 +14,21 @@
     .\scripts\round7.ps1 -Smoke              # a few minutes, writes to results_smoke\
     .\scripts\round7.ps1                     # the real run
     .\scripts\round7.ps1 -Report             # tables after all jobs finished
+    .\scripts\round7.ps1 -MaxParallel 3 -MaxVramGB 4    # gentler: 3 jobs sharing at most ~4 GB of GPU memory
+
+.PARAMETER MaxVramGB
+    Total GPU memory budget in GB for all jobs together. Each job gets MaxVramGB / MaxParallel, minus ~0.5 GB
+    reserved for its CUDA context (which PyTorch cannot cap), as a hard per-process limit (--max-vram-gb).
+    A job that would need more stops with an out-of-memory error instead of slowing the computer down;
+    about 1 GB per job is enough for these models. Jobs also run at below-normal CPU priority.
 #>
 param(
     [int]$MaxParallel = 6,
     [switch]$Smoke,
     [switch]$Report,
     [string]$Device = 'cuda',
-    [string]$Python = ''
+    [string]$Python = '',
+    [double]$MaxVramGB = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,6 +44,12 @@ Write-Host "Python: $Py" -ForegroundColor Yellow
 
 $ResultsDir = if ($Smoke) { 'results_smoke' } else { 'results' }
 $Common = @('--device', $Device, '--results-dir', $ResultsDir)
+if ($MaxVramGB -gt 0) {
+    $perJob = [math]::Max(0.5, $MaxVramGB / $MaxParallel - 0.5)
+    $perJobText = $perJob.ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture)
+    Write-Host "GPU memory: $MaxVramGB GB total for $MaxParallel parallel jobs -> limit $perJobText GB per job (+ CUDA context)" -ForegroundColor Yellow
+    $Common += @('--max-vram-gb', $perJobText)
+}
 if ($Smoke) { $Common += @('--subjects', '2', '18', '--max-epochs', '1', '--n-bagged', '2') }
 
 if ($Report) {
@@ -67,6 +81,7 @@ foreach ($name in $Jobs.Keys) {
     $p = Start-Process -FilePath $Py -ArgumentList $Jobs[$name] -NoNewWindow -PassThru `
          -RedirectStandardOutput $log -RedirectStandardError "logs\round7_$name.err.log"
     $null = $p.Handle
+    try { $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal } catch { }   # keep the desktop responsive
     $running[$name] = $p
 }
 foreach ($name in $running.Keys) {

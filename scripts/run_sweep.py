@@ -51,6 +51,7 @@ def main() -> None:
     ap.add_argument("--subjects", type=int, nargs="*", help="default: all")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--max-vram-gb", type=float, help="forwarded to every run: GPU memory cap per process in GB")
     ap.add_argument("--workers", type=int, default=1, help="combinations trained in parallel (2-3 fit an RTX 3060)")
     ap.add_argument("--max-epochs", type=int, help="forwarded to run_baseline.py (smoke tests only)")
     ap.add_argument("--results-dir", default="results")
@@ -87,6 +88,8 @@ def main() -> None:
         if args.max_epochs:
             cmd += ["--max-epochs", str(args.max_epochs)]
         cmd += ["--results-dir", args.results_dir, "--checkpoint-dir", args.checkpoint_dir]
+        if args.max_vram_gb:
+            cmd += ["--max-vram-gb", str(args.max_vram_gb)]
         jobs.append((tag, cmd))
 
     (ROOT / "logs").mkdir(exist_ok=True)

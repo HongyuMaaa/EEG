@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from aved.adapt import adapt  # noqa: E402
 from aved.data import SUBJECTS, load_dataset  # noqa: E402
 from aved.phenotype import descriptor_table, subject_descriptors  # noqa: E402
-from aved.train import resolve_device  # noqa: E402
+from aved.train import resolve_device, limit_gpu_memory, VRAM_HELP  # noqa: E402
 from pilot_adaptation import ADAPT_CFG  # noqa: E402
 from run_oracle_routing import K_NEIGHBOURS, N_VAL, fit_eegnet, knn_subjects, predict_prob  # noqa: E402
 
@@ -91,10 +91,12 @@ def main():
     ap.add_argument("--subjects", type=int, nargs="*", default=list(SUBJECTS))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--max-vram-gb", type=float, help=VRAM_HELP)
     ap.add_argument("--max-epochs", type=int)
     ap.add_argument("--results-dir", default="results")
     args = ap.parse_args()
     device = resolve_device(args.device)
+    limit_gpu_memory(device, args.max_vram_gb)
     cfg = yaml.safe_load((ROOT / "configs/eegnet.yaml").read_text())
     tcfg = dict(cfg["training"]["loso"])
     if args.max_epochs:
