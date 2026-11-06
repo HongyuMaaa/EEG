@@ -200,3 +200,18 @@ def test_rcr_consistency_rewards_repetition_agreement():
     rng = np.random.default_rng(0)
     noisy = rng.uniform(0, 1, 60)                          # unrelated to the group structure
     assert consistency(noisy, groups, sessions) < 0.8
+
+
+def test_limit_gpu_memory_accepts_device_without_index():
+    from unittest import mock
+    from aved.train import limit_gpu_memory
+    limit_gpu_memory(torch.device("cpu"), 1.0)                        # no-op on CPU
+    props = mock.Mock(total_memory=12 * 1024 ** 3)
+    for dev, expected_index in ((torch.device("cuda"), 0), (torch.device("cuda:1"), 1)):
+        with mock.patch("torch.cuda.current_device", return_value=0), \
+             mock.patch("torch.cuda.get_device_properties", return_value=props), \
+             mock.patch("torch.cuda.set_per_process_memory_fraction") as setter:
+            limit_gpu_memory(dev, 1.5)
+        fraction, index = setter.call_args.args
+        assert abs(fraction - 0.125) < 1e-9 and index == expected_index
+        assert isinstance(index, int)                              # torch rejects torch.device("cuda") here

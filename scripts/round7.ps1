@@ -89,6 +89,10 @@ foreach ($name in $running.Keys) {
     if ($running[$name].ExitCode -ne 0) { $failed += $name }
 }
 if ($failed.Count -gt 0) {
+    foreach ($name in $failed) {
+        Write-Host "--- $name (last lines of logs\round7_$name.err.log):" -ForegroundColor Red
+        Get-Content "logs\round7_$name.err.log" -Tail 6 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
+    }
     Write-Host "FAILED: $($failed -join ', ')  (see logs\round7_<job>.err.log; re-run this script to resume)" -ForegroundColor Red
 } else {
     Write-Host "ALL JOBS FINISHED $(Get-Date -Format 'yyyy-MM-dd HH:mm'). Next: .\scripts\round7.ps1 -Report$(if ($Smoke) {' -Smoke'})" -ForegroundColor Green

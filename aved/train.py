@@ -151,7 +151,8 @@ def limit_gpu_memory(device: torch.device, max_gb: float | None) -> None:
     """Cap the PyTorch caching allocator of this process at ``max_gb`` GB on ``device`` (no-op on CPU / None)."""
     if max_gb is None or device.type != "cuda":
         return
-    total_gb = torch.cuda.get_device_properties(device).total_memory / 1024 ** 3
+    index = device.index if device.index is not None else torch.cuda.current_device()   # "cuda" has no index
+    total_gb = torch.cuda.get_device_properties(index).total_memory / 1024 ** 3
     fraction = min(max(max_gb / total_gb, 0.01), 1.0)
-    torch.cuda.set_per_process_memory_fraction(fraction, device)
+    torch.cuda.set_per_process_memory_fraction(fraction, index)
     print(f"GPU memory limit: {max_gb:.2f} GB of {total_gb:.1f} GB ({100 * fraction:.0f}%)", flush=True)
