@@ -179,3 +179,22 @@ models by repetition consistency was a positive pilot.
 
 **Testing:** sessions 4–6, 3 seeds. Per-subject expert scores are stored in
 `results/rcr_experts/`.
+
+## Round 8 — RCR with RED-trained experts (link between Chapters 1 and 2)
+
+**Code:** `scripts/run_rcr.py --expert red`, job queue `scripts/round8.ps1`.
+
+**Design:**
+- Every expert of the RCR pool is trained with the Chapter 1 objective: variant
+  `red_selfteacher` (EEGNet + Noise2Noise reconstruction of averaged repetitions + frozen
+  single-trial critic). The teacher is trained on the expert's own subjects, on the LOSO budget
+  (≤ 150 epochs, patience 20).
+- The random draws are identical to round 7, so each RED expert sees exactly the subjects and
+  validation subjects of its EEGNet counterpart. The comparison `rcr_red_*` vs `rcr_*` is
+  paired: only the experts' training objective differs.
+
+**Questions:**
+1. Does RED help cross-subject experts? (`rcr_red_full` vs `rcr_full`; in round 1 RED gave
+   nothing in the pooled protocol.)
+2. Does the router work equally well on RED experts? (top1 / top3 / soft vs uniform)
+3. Does the full pipeline improve? (`rcr_red_top3_rapl` vs `rcr_top3_rapl`, 69.81%)
