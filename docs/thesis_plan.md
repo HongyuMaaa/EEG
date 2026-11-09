@@ -188,3 +188,21 @@ The order of WPs reflects this: 2-A and 2-D first (cheap, secure), then 2-B/2-C.
 5. **Weeks 6–7:** figures and chapter drafts (1-E, 2-G); update the midterm slides — the
    current RED values in `presentation/` are illustrative placeholders that contradict the
    measurements.
+
+---
+
+## 7. Status update (after round 7)
+
+| Chapter | Contributions with evidence | Main reports |
+|---|---|---|
+| 1 (within subject) | C1.1 transfer study (negative routes); C1.2 RED +0.81 pp single-trial, +1.3–2.3 pp character-level; C1.3 mechanism (averaged repetitions as Noise2Noise targets, critic necessary) | `reports/chapter1_round{1,2,3}_analysis.md`, `reports/char_level.md` |
+| 2 (new subject, no labels) | C2.1 RCR +1.9 pp; C2.2 RAPL +5–6 pp; C2.3 RCR + RAPL 62.8 → 69.8%; C2.4 negative / diagnostic routing results | `reports/round4_analysis.md` – `reports/round7_analysis.md` |
+
+**Chapter 2's MoE component** is the repetition-consistency router (subject level), not the
+trial-level physiological router of the original design. The original LR-MoE is reported as
+the motivating negative result.
+
+**Remaining work:**
+- figures and chapter drafts;
+- update of the midterm slides with measured numbers;
+- optional: RCR with RED-trained experts.
