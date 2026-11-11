@@ -214,3 +214,9 @@ the motivating negative result.
 - The cross-chapter link is reported as an analysis, not as the main pipeline.
 - **All planned experiments are complete.** Remaining: figures, chapter drafts, midterm slides.
 
+
+**Drafts and figures (after round 8):**
+- `docs/thesis/chapter1.md` and `docs/thesis/chapter2.md` are the chapter drafts. Related work and
+  citations are still `[CITE]` placeholders.
+- Figures are in `docs/thesis/figures/` (PNG at 300 dpi, plus PDF). Regenerate them with
+  `python scripts/make_thesis_figures.py`; every plotted number is written to `figure_data.json`.
