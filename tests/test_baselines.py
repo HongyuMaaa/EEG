@@ -215,3 +215,35 @@ def test_limit_gpu_memory_accepts_device_without_index():
         fraction, index = setter.call_args.args
         assert abs(fraction - 0.125) < 1e-9 and index == expected_index
         assert isinstance(index, int)                              # torch rejects torch.device("cuda") here
+
+
+def test_init_state_is_epoch_zero_candidate():
+    """With --init pretrain, zero fine-tuning epochs must return exactly the pretrained model (EEGNet and RED)."""
+    from aved.data import Fold
+    from aved.train import train_eegnet
+    from aved.train_red import train_red
+    rng = np.random.default_rng(0)
+    n = 6 * 40
+    sess = np.repeat(SESSIONS, 40)
+    y = np.tile(np.repeat([0, 1], 20), 6)
+    group = 100000 + sess * 1000 + np.tile(np.arange(40) // 4, 6)          # groups of 4 same-label repetitions
+    ds = Dataset(rng.standard_normal((n, 21, 58)).astype(np.float32), y, np.ones(n, int), sess, np.arange(n),
+                 y, y, CH21, 200.0, np.zeros(58), group)
+    fold = Fold("within", "sub01_test1", (1,), 1, (1,), 2, (1,), (3, 4, 5, 6))
+    model_cfg = {"F1": 8, "D": 2}
+    init = EEGNet(21, 58, **model_cfg).state_dict()
+    tcfg = {"dropout": 0.5, "batch_size": 32, "lr": 1e-3, "max_epochs": 0, "patience": 5}
+    out = train_eegnet(fold, ds, model_cfg, tcfg, torch.device("cpu"), 0, log=lambda *a: None, init_state=init)
+    assert out["info"]["best_epoch"] == 0 and "init_test_acc" in out["info"]
+    assert all(torch.equal(out["checkpoint"]["state_dict"][k], v) for k, v in init.items())
+    cfg = {"model": model_cfg, "training": tcfg,
+           "teacher": {"k_set": [1], "draws_per_epoch": 1, "val_k": 1, "max_epochs": 0, "patience": 5},
+           "loss": {"lambda_n2n": 1.0, "beta_lateral": 1.0, "lambda_critic": 0.5, "lambda_kd": 1.0, "tau": 2.0}}
+    variant = {"n2n": True, "critic": True, "kd_naive": False, "target": "group_loo"}
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        out = train_red(fold, ds, cfg, variant, torch.device("cpu"), 0, Path(d) / "t.pt", log=lambda *a: None,
+                        init_state=init)
+    st = out["checkpoint"]["state_dict"]
+    assert out["info"]["best_epoch"] == 0
+    assert all(torch.equal(st[f"eegnet.{k}"], v) for k, v in init.items())

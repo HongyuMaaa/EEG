@@ -37,7 +37,9 @@ def channel_stats(X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def train_eegnet(fold: Fold, ds: Dataset, model_cfg: dict, train_cfg: dict, device: torch.device,
-                 seed: int, log=print) -> dict:
+                 seed: int, log=print, init_state: dict | None = None) -> dict:
+    """Train EEGNet on one fold. ``init_state`` (an EEGNet state_dict, e.g. a cross-subject pretrained model)
+    initialises the network; the initialisation itself is then epoch 0 of early stopping."""
     set_seed(seed)
     tr, va, te = fold.masks(ds)
     mean, std = channel_stats(ds.X[tr])
@@ -54,6 +56,13 @@ def train_eegnet(fold: Fold, ds: Dataset, model_cfg: dict, train_cfg: dict, devi
     bs = train_cfg["batch_size"]
 
     best = {"val_loss": np.inf, "epoch": -1, "state": None}
+    init_info = {}
+    if init_state is not None:
+        model.load_state_dict(init_state)
+        val_loss, val_acc, _ = _evaluate(model, Xva, yva, loss_fn, bs * 8)
+        init_info = {"init_val_acc": val_acc, "init_test_acc": _evaluate(model, Xte, yte, loss_fn, bs * 8)[1]}
+        best = {"val_loss": val_loss, "epoch": 0, "state": copy.deepcopy(model.state_dict())}
+        log(f"  init: val_acc {val_acc:.3f} test_acc {init_info['init_test_acc']:.3f}")
     history = []
     t0 = time.perf_counter()
     for epoch in range(1, train_cfg["max_epochs"] + 1):
@@ -89,7 +98,7 @@ def train_eegnet(fold: Fold, ds: Dataset, model_cfg: dict, train_cfg: dict, devi
         "test_mask": te, "score": prob, "pred": (prob > 0.5).astype(np.int64),
         "info": {"best_epoch": best["epoch"], "epochs_run": len(history), "val_acc": val_acc,
                  "test_loss": test_loss, "train_time_s": round(train_time, 1),
-                 "n_train": int(tr.sum()), "n_val": int(va.sum()), "n_test": int(te.sum())},
+                 "n_train": int(tr.sum()), "n_val": int(va.sum()), "n_test": int(te.sum()), **init_info},
         "history": history,
         "checkpoint": {"state_dict": model.state_dict(), "channel_mean": mean, "channel_std": std,
                        "model_cfg": model_cfg, "train_cfg": train_cfg, "n_channels": ds.X.shape[1],
@@ -122,7 +131,7 @@ def train_dcpm(fold: Fold, ds: Dataset, cfg: dict, log=print) -> dict:
         "test_mask": te, "score": score, "pred": (score > 0).astype(np.int64),
         "info": {"n_components": best_m, "val_acc": val_accs[best_m], "val_acc_grid": val_accs,
                  "train_time_s": round(time.perf_counter() - t0, 1),
-                 "n_train": int(tr.sum()), "n_val": int(va.sum()), "n_test": int(te.sum())},
+                 "n_train": int(tr.sum()), "n_val": int(va.sum()), "n_test": int(te.sum()), **init_info},
         "history": None,
         "checkpoint": {"model": clf, "cfg": cfg, "fold": fold.name},
     }

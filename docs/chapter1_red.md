@@ -143,3 +143,47 @@ The final comparison is therefore reported twice:
 - on all folds;
 - on the clean folds whose test session never served for selection:
   `compare_methods.py --exclude-sessions 2 5` (112 folds).
+
+## 6. Round 9: cross-subject pretraining + within-subject fine-tuning (direction 4)
+
+Motivation: `reports/chapter1_headroom_analysis.md`. Within the epoch window there is about 3.4 pp of
+headroom left with 5 calibration sessions, and other subjects' data may supply part of it. At the LDA
+level, a pooled covariance prior gave only +0.1 pp, but deep features may transfer where LDA
+covariances do not.
+
+**Pretraining** (`scripts/pretrain_subjects.py`):
+- For each target subject s: one EEGNet trained on the other 27 subjects, with early stopping on
+  the 3 subjects that follow s (as in LOSO).
+- Each subject is z-scored per channel with its own statistics, matching the per-fold, per-subject
+  normalisation of the within protocol.
+- Settings: `training.loso`.
+- Output: `checkpoints/pretrain/seed<k>/sub<XX>.pt`; zero-shot diagnostics in
+  `results/pretrain/seed<k>/`.
+
+**Fine-tuning** (`run_baseline.py --init pretrain --tag ft`):
+- Same folds and same settings as the from-scratch runs (`training.within`). The only change is the
+  initialisation.
+- The pretrained model itself is epoch 0 of early stopping, so fine-tuning can never select a model
+  that validates worse than the initialisation.
+- For RED, the teacher (trained on single trials, `red_selfteacher`) and the student's EEGNet both
+  start from the pretrained model; the ERP decoder starts random.
+- Fold diagnostics: `init_val_acc`, `init_test_acc` (the pretrained model on the fold's validation
+  and test session, before fine-tuning).
+
+| Method | Question |
+|---|---|
+| `eegnet@ft` vs `eegnet` | Does cross-subject pretraining help within-subject decoding? |
+| `red_selfteacher@ft` vs `eegnet@ft` | Does RED still add on top of pretraining? |
+| `red_selfteacher@ft` vs `eegnet` | Total gain of the combination |
+
+**Job queue:** `scripts/round9.ps1`, 3 seeds.
+1. Phase 1: pretraining.
+2. Phase 2: fine-tuning.
+
+**Cost estimates** from the earlier runs (the earlier per-seed run times are 0.6 h LOSO, 1.4 h
+EEGNet within, 11 h RED within):
+
+| Job | Total time | 6 jobs in parallel |
+|---|---|---|
+| Pretraining, 3 seeds | about 2 h | |
+| Fine-tuning, 3 seeds | about 40 h | about 7–8 h |

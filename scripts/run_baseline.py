@@ -39,10 +39,12 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
 from aved.config import load_config  # noqa: E402
 from aved.data import PROTOCOLS, SESSIONS, SUBJECTS, fold_subjects, load_dataset, make_folds  # noqa: E402
 from aved.train import resolve_device, train_dcpm, train_eegnet, limit_gpu_memory, VRAM_HELP  # noqa: E402
 from aved.train_red import train_red  # noqa: E402
+from pretrain_subjects import pretrain_path  # noqa: E402
 
 RED_METHODS = tuple(yaml.safe_load((ROOT / "configs/red.yaml").read_text())["variants"])
 METHODS = ("eegnet", "dcpm", "dcpm_plain") + RED_METHODS
@@ -98,6 +100,9 @@ def main() -> None:
                     help="override config values, e.g. loss.lambda_critic=1.0 teacher.k_set=[1,2,3,4,5,6] "
                          "(values parsed as YAML); requires --tag")
     ap.add_argument("--tag", help="name suffix for this configuration: results go to results/<method>@<tag>/")
+    ap.add_argument("--init", choices=("none", "pretrain"), default="none",
+                    help="pretrain: start EEGNet / RED (student and teacher) from the cross-subject model of the fold's "
+                         "test subject (scripts/pretrain_subjects.py, same seed); within protocol only, requires --tag")
     ap.add_argument("--set-from-sweep", metavar="SWEEP", help="prepend the overrides of the configuration selected "
                     "(by validation accuracy) in sweep SWEEP of this method; requires --tag")
     args = ap.parse_args()
@@ -106,6 +111,9 @@ def main() -> None:
         inherited = selected_overrides(ROOT / args.results_dir, args.method, args.set_from_sweep, args.protocol)
         print(f"overrides from sweep {args.set_from_sweep!r}: {' '.join(inherited)}")
         args.set = inherited + list(args.set)
+    if args.init != "none" and (args.protocol != "within" or args.method == "dcpm" or args.method == "dcpm_plain"
+                                or not args.tag):
+        sys.exit("--init pretrain needs --protocol within, an EEGNet or RED method, and --tag")
     if (args.set or args.set_from_sweep) and not args.tag:
         sys.exit("--set requires --tag, so that results of different configurations are kept apart")
     if args.tag and not re.fullmatch(r"[A-Za-z0-9._-]+", args.tag):
@@ -141,8 +149,8 @@ def main() -> None:
             method_cfg["training"]["max_epochs"] = args.max_epochs
             method_cfg["teacher"]["max_epochs"] = args.max_epochs
         device = resolve_device(args.device)
-        teacher_key = json.dumps({k: method_cfg[k] for k in ("model", "training", "teacher")} | {"data": data_fp},
-                                 sort_keys=True)
+        teacher_key = json.dumps({k: method_cfg[k] for k in ("model", "training", "teacher")} | {"data": data_fp}
+                                 | ({"init": args.init} if args.init != "none" else {}), sort_keys=True)
         teacher_dir = (ROOT / args.checkpoint_dir / "teacher" / args.protocol / f"seed{args.seed}"
                        / hashlib.sha256(teacher_key.encode()).hexdigest()[:10])
     else:
@@ -165,7 +173,7 @@ def main() -> None:
         "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
         "environment": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__,
                         "platform": platform.platform()},
-        "max_epochs_override": args.max_epochs,
+        "max_epochs_override": args.max_epochs, "init": args.init,
         "started": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     (run_dir / "run_info.json").write_text(json.dumps(run_info, indent=2))
@@ -183,11 +191,18 @@ def main() -> None:
             cache[subjects] = load_dataset(data_dir, subjects)
         ds = cache[subjects]
         print(f"[{i}/{len(todo)}] fold {fold.name}", flush=True)
+        init_state = None
+        if args.init == "pretrain":
+            path = pretrain_path(ROOT / args.checkpoint_dir, args.seed, fold.test_subjects[0])
+            if not path.exists():
+                sys.exit(f"{path} not found: run `python scripts/pretrain_subjects.py --seed {args.seed}` first")
+            init_state = torch.load(path, map_location=device, weights_only=False)["state_dict"]
         if args.method == "eegnet":
-            out = train_eegnet(fold, ds, method_cfg["model"], method_cfg["training"], device, args.seed)
+            out = train_eegnet(fold, ds, method_cfg["model"], method_cfg["training"], device, args.seed,
+                               init_state=init_state)
         elif args.method in RED_METHODS:
             out = train_red(fold, ds, method_cfg, method_cfg["variant"], device, args.seed,
-                            teacher_dir / f"{fold.name}.pt")
+                            teacher_dir / f"{fold.name}.pt", init_state=init_state)
         else:
             out = train_dcpm(fold, ds, method_cfg)
         out["info"].update(device=str(device), git_commit=run_info["git_commit"])

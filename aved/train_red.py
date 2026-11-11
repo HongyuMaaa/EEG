@@ -96,7 +96,7 @@ def fixed_averages(X: torch.Tensor, y: torch.Tensor, bank: GroupBank, k: int, se
 # ----------------------------------------------------------------------------------------------
 
 def train_teacher(fold: Fold, ds: Dataset, norm, model_cfg: dict, train_cfg: dict, tcfg: dict,
-                  device: torch.device, seed: int, log=print) -> tuple[EEGNet, dict]:
+                  device: torch.device, seed: int, log=print, init_state: dict | None = None) -> tuple[EEGNet, dict]:
     set_seed(seed + 1000)
     tr, va, te = fold.masks(ds)
     mean, std = norm
@@ -107,10 +107,13 @@ def train_teacher(fold: Fold, ds: Dataset, norm, model_cfg: dict, train_cfg: dic
     Xva, yva = fixed_averages(X[idx["va"]], y[idx["va"]], banks["va"], tcfg["val_k"], seed, draws=3)
 
     model = EEGNet(ds.X.shape[1], ds.X.shape[2], dropout=train_cfg["dropout"], **model_cfg).to(device)
+    if init_state is not None:
+        model.load_state_dict(init_state)
     opt = torch.optim.Adam(model.parameters(), lr=train_cfg["lr"])
     gen = torch.Generator().manual_seed(seed + 1000)
     bs = train_cfg["batch_size"]
-    best = {"val_loss": np.inf, "epoch": 0, "state": copy.deepcopy(model.state_dict())}   # epoch 0 = initialisation
+    best = {"val_loss": _eval(model, Xva, yva)[0] if init_state is not None else np.inf,
+            "epoch": 0, "state": copy.deepcopy(model.state_dict())}   # epoch 0 = initialisation
     t0 = time.perf_counter()
     n_epochs = tcfg["max_epochs"] if tcfg.get("train", True) else 0                        # train: false -> random teacher
     for epoch in range(1, n_epochs + 1):
@@ -165,8 +168,11 @@ def lateral_operator(ch_names: list[str], device) -> torch.Tensor:
 
 
 def train_red(fold: Fold, ds: Dataset, cfg: dict, variant: dict, device: torch.device, seed: int,
-              teacher_cache: Path, log=print) -> dict:
-    """Train the teacher (or load it from ``teacher_cache``) and one student variant on one fold."""
+              teacher_cache: Path, log=print, init_state: dict | None = None) -> dict:
+    """Train the teacher (or load it from ``teacher_cache``) and one student variant on one fold.
+
+    ``init_state`` (an EEGNet state_dict, e.g. a cross-subject pretrained model) initialises the teacher and the
+    student's EEGNet; the student's initialisation is epoch 0 of early stopping (the ERP decoder starts random)."""
     tr, va, te = fold.masks(ds)
     mean, std = channel_stats(ds.X[tr])
     model_cfg, train_cfg = cfg["model"], cfg["training"]
@@ -185,7 +191,8 @@ def train_red(fold: Fold, ds: Dataset, cfg: dict, variant: dict, device: torch.d
             tinfo = ck["info"]
             log(f"  [teacher] loaded {teacher_cache.name}")
         else:
-            teacher, tinfo = train_teacher(fold, ds, (mean, std), model_cfg, train_cfg, cfg["teacher"], device, seed, log)
+            teacher, tinfo = train_teacher(fold, ds, (mean, std), model_cfg, train_cfg, cfg["teacher"], device, seed, log,
+                                           init_state=init_state)
             teacher_cache.parent.mkdir(parents=True, exist_ok=True)
             tmp = teacher_cache.with_suffix(f".tmp{os.getpid()}")       # atomic write: parallel runs may share the cache
             torch.save({"state_dict": teacher.state_dict(), "info": tinfo, "channel_mean": mean, "channel_std": std,
@@ -221,6 +228,11 @@ def train_red(fold: Fold, ds: Dataset, cfg: dict, variant: dict, device: torch.d
     gen = torch.Generator().manual_seed(seed)
     bs, tau, lam = train_cfg["batch_size"], cfg["loss"]["tau"], cfg["loss"]
     best = {"val_loss": np.inf, "epoch": -1, "state": None}
+    if init_state is not None:
+        student.eegnet.load_state_dict(init_state)
+        val_loss, val_acc = _eval(student.eegnet, X[iva], y[iva])
+        tinfo = {**tinfo, "init_val_acc": val_acc, "init_test_acc": _eval(student.eegnet, X[ite], y[ite])[1]}
+        best = {"val_loss": val_loss, "epoch": 0, "state": copy.deepcopy(student.state_dict())}
     history = []
     t0 = time.perf_counter()
     for epoch in range(1, train_cfg["max_epochs"] + 1):
