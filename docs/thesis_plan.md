@@ -206,3 +206,11 @@ the motivating negative result.
 - figures and chapter drafts;
 - update of the midterm slides with measured numbers;
 - optional: RCR with RED-trained experts.
+
+**Round 8 (RCR with RED experts, `reports/round8_analysis.md`):**
+- RED experts are not better zero-shot (+0.14 pp, n.s.), but adapt better with RAPL
+  (+0.68 pp, 23/28, p = 4 × 10⁻⁴).
+- Best label-free pipeline: 70.09% (RED experts) vs 69.81% (EEGNet experts), +0.28 pp, n.s.
+- The cross-chapter link is reported as an analysis, not as the main pipeline.
+- **All planned experiments are complete.** Remaining: figures, chapter drafts, midterm slides.
+
