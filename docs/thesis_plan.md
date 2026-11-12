@@ -220,3 +220,10 @@ the motivating negative result.
   citations are still `[CITE]` placeholders.
 - Figures are in `docs/thesis/figures/` (PNG at 300 dpi, plus PDF). Regenerate them with
   `python scripts/make_thesis_figures.py`; every plotted number is written to `figure_data.json`.
+
+**Round 9 (cross-subject pretraining + RED, `reports/round9_analysis.md`):**
+- Pretraining alone: +0.29 pp (18/28).
+- RED on top of pretraining: +0.72 pp (26/28).
+- **Combined: +1.01 pp, 28/28 subjects; character accuracy +2.0–2.6 pp.**
+- `red_selfteacher@ft` becomes the Chapter 1 method and `eegnet@ft` an extra baseline.
+- Proposed next: limited calibration (1–3 own sessions) for all four methods.
