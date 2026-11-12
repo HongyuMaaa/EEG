@@ -1,0 +1,13 @@
+{
+  "subject": 21,
+  "seed": 2,
+  "zero_shot_acc": 0.4901007294199375,
+  "best_epoch": 2,
+  "epochs_run": 22,
+  "val_acc": 0.5026626586914062,
+  "test_loss": 0.7252161502838135,
+  "train_time_s": 136.8,
+  "n_train": 69104,
+  "n_val": 8638,
+  "n_test": 2879
+}

@@ -1,0 +1,33 @@
+{
+  "fold": "sub20_test5",
+  "test_session": 5,
+  "val_subjects": [
+    20
+  ],
+  "val_session": 6,
+  "train_sessions": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "accuracy": 0.6270833333333333,
+  "per_subject": {
+    "20": {
+      "accuracy": 0.6270833333333333,
+      "n_test": 480
+    }
+  },
+  "best_epoch": 20,
+  "epochs_run": 70,
+  "val_acc": 0.6555323600769043,
+  "test_loss": 0.6628106236457825,
+  "train_time_s": 19.4,
+  "n_train": 1920,
+  "n_val": 479,
+  "n_test": 480,
+  "init_val_acc": 0.5762004256248474,
+  "init_test_acc": 0.5604166984558105,
+  "device": "cuda",
+  "git_commit": "03f0785c2bd06a6c1dd59f7630dcce8f0e5f275c"
+}
