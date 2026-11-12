@@ -187,3 +187,49 @@ EEGNet within, 11 h RED within):
 |---|---|---|
 | Pretraining, 3 seeds | about 2 h | |
 | Fine-tuning, 3 seeds | about 40 h | about 7–8 h |
+
+## 7. Round 10: limited calibration (direction 1)
+
+Motivation: `reports/chapter1_headroom_analysis.md` and `reports/round9_analysis.md`.
+
+- **Headroom grows as own data shrink.** In the LDA learning curve, going from 1 to 5 own sessions
+  gains 5.1 pp, while the step from 4 to 5 adds only 0.4 pp.
+- **Both components should matter more with little data:**
+  - RED acts like extra calibration data;
+  - pretraining supplies a prior that dominates when own data are few.
+
+**Design:**
+
+| Item | Choice |
+|---|---|
+| Folds | The 168 within-subject folds, with the test and validation sessions unchanged |
+| Own training sessions | Only n = 1, 2 or 3 of the 4 (`run_baseline.py --n-train-sessions N`) |
+| Session choice | `aved.data.limit_train_sessions`: cyclic order after the validation session, skipping the test session |
+| 4-session condition | The existing `eegnet`, `eegnet@ft`, `red_selfteacher`, `red_selfteacher@ft` results |
+| Methods | The same four, with tags `cal<N>` (from scratch) and `ft_cal<N>` (fine-tuned from the round-9 pretrained models) |
+
+The session choice has three properties:
+- it is deterministic, and identical for every method and seed;
+- it is nested: the session for n = 1 is part of n = 2, which is part of n = 3;
+- it is balanced: each session is the single training session in exactly one fold per subject.
+
+**Implementation details:**
+- Training settings are unchanged (`training.within`), with early stopping on the validation
+  session.
+- The RED teacher cache is keyed on n, so the teachers of different calibration amounts never mix.
+
+**Questions:**
+1. How does each method's accuracy scale with calibration data?
+2. Does RED's gain grow as data shrink?
+3. Does pretraining's gain grow as data shrink?
+4. Does the combination remain additive?
+5. How much calibration time does each method save? (data equivalence: the number of own sessions
+   EEGNet needs to match it)
+
+**Job queue:** `scripts/round10.ps1`. Seed-major order, so seed 0 can be analysed first. Estimated
+cost:
+
+| Scope | Job-hours | Wall time, 6 jobs in parallel |
+|---|---|---|
+| 3 seeds | about 110 | about 18–20 h |
+| `-Seeds 0` only | | about 6–7 h |

@@ -18,6 +18,7 @@ Artifact-flagged trials are excluded from training, validation and testing.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -126,6 +127,20 @@ def make_folds(protocol: str, subjects=SUBJECTS, sessions=SESSIONS) -> list[Fold
     else:
         raise ValueError(f"unknown protocol {protocol!r}; choose from {PROTOCOLS}")
     return folds
+
+
+def limit_train_sessions(fold: Fold, n: int) -> Fold:
+    """Within-subject fold with only ``n`` own training sessions (limited-calibration study).
+
+    The sessions are taken in cyclic order after the validation session, skipping the test session, so the
+    choice is deterministic, identical for every method and seed, and nested (n = 1 is contained in n = 2, ...)."""
+    if fold.protocol != "within":
+        raise ValueError("limit_train_sessions applies to the within protocol only")
+    if not 1 <= n <= len(fold.train_sessions):
+        raise ValueError(f"n must be in 1..{len(fold.train_sessions)}")
+    order = [(fold.val_session - 1 + j) % len(SESSIONS) + 1 for j in range(1, len(SESSIONS))]
+    chosen = [x for x in order if x in fold.train_sessions][:n]
+    return dataclasses.replace(fold, train_sessions=tuple(sorted(chosen)))
 
 
 def fold_subjects(fold: Fold) -> tuple:

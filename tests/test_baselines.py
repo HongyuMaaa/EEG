@@ -247,3 +247,17 @@ def test_init_state_is_epoch_zero_candidate():
     st = out["checkpoint"]["state_dict"]
     assert out["info"]["best_epoch"] == 0
     assert all(torch.equal(st[f"eegnet.{k}"], v) for k, v in init.items())
+
+
+def test_limit_train_sessions_nested_and_disjoint():
+    from aved.data import limit_train_sessions
+    for f in make_folds("within", [1]):
+        prev = set()
+        for n in (1, 2, 3, 4):
+            g = limit_train_sessions(f, n)
+            assert len(g.train_sessions) == n and set(g.train_sessions) <= set(f.train_sessions)
+            assert g.test_session not in g.train_sessions and g.val_session not in g.train_sessions
+            assert prev <= set(g.train_sessions)               # nested
+            assert (g.test_session, g.val_session, g.name) == (f.test_session, f.val_session, f.name)
+            prev = set(g.train_sessions)
+        assert limit_train_sessions(f, 4).train_sessions == f.train_sessions

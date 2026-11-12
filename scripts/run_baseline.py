@@ -41,7 +41,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 from aved.config import load_config  # noqa: E402
-from aved.data import PROTOCOLS, SESSIONS, SUBJECTS, fold_subjects, load_dataset, make_folds  # noqa: E402
+from aved.data import (PROTOCOLS, SESSIONS, SUBJECTS, fold_subjects, limit_train_sessions, load_dataset,  # noqa: E402
+                       make_folds)
 from aved.train import resolve_device, train_dcpm, train_eegnet, limit_gpu_memory, VRAM_HELP  # noqa: E402
 from aved.train_red import train_red  # noqa: E402
 from pretrain_subjects import pretrain_path  # noqa: E402
@@ -103,6 +104,9 @@ def main() -> None:
     ap.add_argument("--init", choices=("none", "pretrain"), default="none",
                     help="pretrain: start EEGNet / RED (student and teacher) from the cross-subject model of the fold's "
                          "test subject (scripts/pretrain_subjects.py, same seed); within protocol only, requires --tag")
+    ap.add_argument("--n-train-sessions", type=int, choices=(1, 2, 3, 4),
+                    help="limited-calibration study: use only N own training sessions (within protocol; the test and "
+                         "validation sessions are unchanged; aved.data.limit_train_sessions); requires --tag")
     ap.add_argument("--set-from-sweep", metavar="SWEEP", help="prepend the overrides of the configuration selected "
                     "(by validation accuracy) in sweep SWEEP of this method; requires --tag")
     args = ap.parse_args()
@@ -114,6 +118,8 @@ def main() -> None:
     if args.init != "none" and (args.protocol != "within" or args.method == "dcpm" or args.method == "dcpm_plain"
                                 or not args.tag):
         sys.exit("--init pretrain needs --protocol within, an EEGNet or RED method, and --tag")
+    if args.n_train_sessions and (args.protocol != "within" or not args.tag):
+        sys.exit("--n-train-sessions needs --protocol within and --tag")
     if (args.set or args.set_from_sweep) and not args.tag:
         sys.exit("--set requires --tag, so that results of different configurations are kept apart")
     if args.tag and not re.fullmatch(r"[A-Za-z0-9._-]+", args.tag):
@@ -150,7 +156,9 @@ def main() -> None:
             method_cfg["teacher"]["max_epochs"] = args.max_epochs
         device = resolve_device(args.device)
         teacher_key = json.dumps({k: method_cfg[k] for k in ("model", "training", "teacher")} | {"data": data_fp}
-                                 | ({"init": args.init} if args.init != "none" else {}), sort_keys=True)
+                                 | ({"init": args.init} if args.init != "none" else {})
+                                 | ({"n_train_sessions": args.n_train_sessions} if args.n_train_sessions else {}),
+                                 sort_keys=True)
         teacher_dir = (ROOT / args.checkpoint_dir / "teacher" / args.protocol / f"seed{args.seed}"
                        / hashlib.sha256(teacher_key.encode()).hexdigest()[:10])
     else:
@@ -173,12 +181,14 @@ def main() -> None:
         "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
         "environment": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__,
                         "platform": platform.platform()},
-        "max_epochs_override": args.max_epochs, "init": args.init,
+        "max_epochs_override": args.max_epochs, "init": args.init, "n_train_sessions": args.n_train_sessions,
         "started": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     (run_dir / "run_info.json").write_text(json.dumps(run_info, indent=2))
 
     folds = make_folds(args.protocol, args.subjects, args.sessions)
+    if args.n_train_sessions:
+        folds = [limit_train_sessions(f, args.n_train_sessions) for f in folds]
     todo = [f for f in folds if args.overwrite or not (run_dir / "folds" / f"{f.name}.json").exists()]
     print(f"{run_name} / {args.protocol} / seed {args.seed} on {device}: "
           f"{len(folds)} folds selected, {len(folds) - len(todo)} already done, {len(todo)} to run")
