@@ -1,0 +1,30 @@
+{
+  "fold": "sub22_test2",
+  "test_session": 2,
+  "val_subjects": [
+    22
+  ],
+  "val_session": 3,
+  "train_sessions": [
+    4,
+    5,
+    6
+  ],
+  "accuracy": 0.6861924686192469,
+  "per_subject": {
+    "22": {
+      "accuracy": 0.6861924686192469,
+      "n_test": 478
+    }
+  },
+  "best_epoch": 195,
+  "epochs_run": 245,
+  "val_acc": 0.7395833730697632,
+  "test_loss": 0.5817690491676331,
+  "train_time_s": 39.5,
+  "n_train": 1440,
+  "n_val": 480,
+  "n_test": 478,
+  "device": "cuda",
+  "git_commit": "7237f3c61ae6aed5ad284dbf10b55a4cf124d9f8"
+}
