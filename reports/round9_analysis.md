@@ -95,7 +95,7 @@ Each therefore recovers a different part of the variance that 5 calibration sess
 **The combination is the strongest Chapter 1 result.**
 
 - +1.01 pp single-trial, with **every one of the 28 subjects improved**.
-- +2.0–2.6 pp character accuracy at every number of repetitions.
+- +1.8–2.6 pp character accuracy at every number of repetitions.
 - +1.9–2.2 bits/min ITR at short repetition counts.
 - No inference cost: the deployed model is still a plain EEGNet.
 

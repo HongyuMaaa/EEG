@@ -175,11 +175,18 @@ def fig_ch1_ablation(out):
 
 
 def fig_ch1_subjects(out):
-    e, r = subj("eegnet", "within"), subj("red_selfteacher", "within")
-    fig, ax = plt.subplots(figsize=(4.8, 5.6))
-    dumbbell(ax, e, r, "EEGNet", "RED (single-trial critic)")
-    ax.set_title("Per-subject accuracy, within subject", loc="left")
-    DATA["ch1_subjects"] = {"eegnet": e.round(2).to_dict(), "red_selfteacher": r.round(2).to_dict()}
+    """Per subject: EEGNet vs the final method (RED + cross-subject pretraining), 4 and 1 own training sessions."""
+    panels = [("eegnet", "red_selfteacher@ft", "(a) 4 own training sessions"),
+              ("eegnet@cal1", "red_selfteacher@ft_cal1", "(b) 1 own training session")]
+    fig, axes = plt.subplots(1, 2, figsize=(8.4, 5.8))
+    data = {}
+    for ax, (base, new, title) in zip(axes, panels):
+        e, r = subj(base, "within"), subj(new, "within")
+        dumbbell(ax, e, r, "EEGNet", "RED + pretraining")
+        ax.set_title(title, loc="left")
+        data[title] = {"eegnet": e.round(2).to_dict(), "red_pretrain": r.round(2).to_dict()}
+    fig.subplots_adjust(wspace=0.3)
+    DATA["ch1_subjects"] = data
     save(fig, out, "ch1_per_subject")
 
 
@@ -187,12 +194,12 @@ def fig_ch1_character(out):
     meta = load_meta(ROOT / "derivatives/preprocessed")
     codes = codebook(meta)
     methods = [("dcpm", "DCPM", AQUA, "s"), ("eegnet", "EEGNet", ORANGE, "o"),
-               ("red_selfteacher", "RED", BLUE, "D")]
+               ("red_selfteacher@ft", "RED + pretraining", BLUE, "D")]
     reps = np.arange(1, 7)
     acc = {m: [100 * char_accuracy(RESULTS, m, meta, codes, R).mean() for R in reps] for m, *_ in methods}
     rate = {m: [np.mean([itr(p, t=1.2 * R + 1.0) for p in char_accuracy(RESULTS, m, meta, codes, R)])
                 for R in reps] for m, *_ in methods}
-    fig, axes = plt.subplots(1, 2, figsize=(7.4, 3.0))
+    fig, axes = plt.subplots(1, 2, figsize=(8.2, 3.0))
     for m, label, color, mk in methods:
         axes[0].plot(reps, acc[m], marker=mk, ms=6, lw=2, color=color, mec=SURFACE, label=label)
         axes[1].plot(reps, rate[m], marker=mk, ms=6, lw=2, color=color, mec=SURFACE, label=label)
@@ -203,9 +210,10 @@ def fig_ch1_character(out):
     for ax, t in zip(axes, ["(a) 32-class character accuracy", "(b) information transfer rate"]):
         ax.set_xlabel("repetitions per character")
         ax.set_xticks(reps)
-        ax.set_xlim(0.7, 6.9)
+        ax.set_xlim(0.7, 7.9)
         ax.set_title(t, loc="left")
-    axes[0].legend(loc="upper left")
+    axes[0].legend(loc="lower right")
+    fig.subplots_adjust(wspace=0.5)
     DATA["ch1_character"] = {"accuracy": acc, "itr": rate}
     save(fig, out, "ch1_character_level")
 
