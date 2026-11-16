@@ -227,3 +227,11 @@ the motivating negative result.
 - **Combined: +1.01 pp, 28/28 subjects; character accuracy +2.0–2.6 pp.**
 - `red_selfteacher@ft` becomes the Chapter 1 method and `eegnet@ft` an extra baseline.
 - Proposed next: limited calibration (1–3 own sessions) for all four methods.
+
+**Round 10 (limited calibration, `reports/round10_analysis.md`):**
+- RED + pretraining − EEGNet: +3.12 / +1.49 / +1.11 / +1.01 pp with 1 / 2 / 3 / 4 own sessions;
+  28/28 subjects at every level.
+- With 1 session: character accuracy +8.8 pp; peak ITR 14.7 → 19.0 bits/min.
+- RED + pretraining with n sessions ≥ EEGNet with n + 1 sessions.
+- Chapter 1's headline becomes calibration efficiency. The chapter draft and figures still need
+  updating (the figure `ch1_calibration` exists).

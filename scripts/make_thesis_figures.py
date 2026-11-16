@@ -210,6 +210,54 @@ def fig_ch1_character(out):
     save(fig, out, "ch1_character_level")
 
 
+def fig_ch1_calibration(out):
+    """Limited calibration (round 10): 1-4 own training sessions. Colour = objective (orange EEGNet, blue RED),
+    line style / marker fill = initialisation (solid filled = from scratch, dashed open = cross-subject pretrained)."""
+    ns = [1, 2, 3, 4]
+
+    def name(m, n, ft):
+        return m + ("@ft" if ft else "") if n == 4 else f"{m}@{'ft_' if ft else ''}cal{n}"
+    series = [("eegnet", 0, "EEGNet", ORANGE), ("eegnet", 1, "EEGNet + pretraining", ORANGE),
+              ("red_selfteacher", 0, "RED", BLUE), ("red_selfteacher", 1, "RED + pretraining", BLUE)]
+    acc = {(m, ft): [subj(name(m, n, ft), "within") for n in ns] for m, ft, *_ in series}
+    meta = load_meta(ROOT / "derivatives/preprocessed")
+    codes = codebook(meta)
+    chars = {(m, ft): [100 * np.mean(char_accuracy(RESULTS, name(m, n, ft), meta, codes, 6)) for n in ns]
+             for m, ft, *_ in series}
+    fig, axes = plt.subplots(1, 3, figsize=(10.4, 3.3))
+
+    def style(ft, color):
+        return dict(color=color, lw=2, ls="--" if ft else "-", marker="o", ms=6,
+                    mfc=SURFACE if ft else color, mec=color, mew=1.6)
+    data = {"accuracy": {}, "gain": {}, "char_acc_R6": {}}
+    for m, ft, label, color in series:
+        a = [x.mean() for x in acc[(m, ft)]]
+        axes[0].plot(ns, a, label=label, **style(ft, color))
+        axes[2].plot(ns, chars[(m, ft)], label=label, **style(ft, color))
+        data["accuracy"][label] = a
+        data["char_acc_R6"][label] = chars[(m, ft)]
+        if (m, ft) == ("eegnet", 0):
+            continue
+        st = [paired(x, b) for x, b in zip(acc[(m, ft)], acc[("eegnet", 0)])]
+        off = {("eegnet", 1): -0.12, ("red_selfteacher", 0): 0.0, ("red_selfteacher", 1): 0.12}[(m, ft)]
+        x = np.array(ns) + off
+        axes[1].vlines(x, [t["lo"] for t in st], [t["hi"] for t in st], color=color, lw=2)
+        axes[1].plot(x, [t["mean"] for t in st], label=label, **style(ft, color))
+        data["gain"][label] = st
+    axes[1].axhline(0, color=INK_3, lw=1)
+    for ax, title, ylabel in zip(axes, ["(a) single-trial accuracy", "(b) gain over EEGNet (95% CI)",
+                                        "(c) character accuracy, 6 repetitions"],
+                                 ["accuracy (%)", "Δ accuracy (pp)", "character accuracy (%)"]):
+        ax.set_xticks(ns)
+        ax.set_xlabel("own training sessions")
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, loc="left")
+    axes[0].legend(loc="lower right")
+    fig.subplots_adjust(wspace=0.38)
+    DATA["ch1_calibration"] = data
+    save(fig, out, "ch1_calibration")
+
+
 # ------------------------------------------------------------------ Chapter 2
 S46 = [4, 5, 6]
 
@@ -363,7 +411,8 @@ def main():
     args = ap.parse_args()
     out = ROOT / args.out
     out.mkdir(parents=True, exist_ok=True)
-    for f in (fig_ch1_headroom, fig_ch1_ablation, fig_ch1_subjects, fig_ch1_character, fig_ch2_pipeline,
+    for f in (fig_ch1_headroom, fig_ch1_ablation, fig_ch1_subjects, fig_ch1_character, fig_ch1_calibration,
+              fig_ch2_pipeline,
               fig_ch2_router, fig_ch2_rapl_controls, fig_ch2_negative, fig_ch2_subjects, fig_ch2_red_experts):
         f(out)
     (out / "figure_data.json").write_text(json.dumps(DATA, indent=1, default=float))
